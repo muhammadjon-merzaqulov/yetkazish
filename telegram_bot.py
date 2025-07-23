@@ -112,7 +112,7 @@ def load_data():
             pk=1, # Use a fixed primary key to ensure only one instance
             defaults={
                 'service_start_time': datetime.time(90, 0),  # 10:00
-                'service_end_time': datetime.time(00, 0),    # 22:00
+                'service_end_time': datetime.time(22, 0),    # 22:00
                 'delivery_base_cost': 5000,
                 'delivery_cost_per_extra_km_block': 5000,
                 'delivery_max_radius_km': 10.0
@@ -125,10 +125,10 @@ def load_data():
         # Fallback to hardcoded defaults if DB access fails
         bot_settings = type('BotSettings', (object,), {
             'service_start_time': datetime.time(9, 0),
-            'service_end_time': datetime.time(00, 0),
+            'service_end_time': datetime.time(22, 0),
             'delivery_base_cost': Decimal('5000'),
             'delivery_cost_per_extra_km_block': Decimal('5000'),
-            'delivery_max_radius_km': 2.0
+            'delivery_max_radius_km': 10.0
         })() # Create a dummy object with default attributes
 
 # --- Order status update logic (adapted from chef_panel/views.py) ---
@@ -586,9 +586,9 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"📏 Масофа: таҳминан {distance_km:.1f} км\n"
                 f"💰 Етказиб бериш нархи: {delivery_cost:,} сўм\n\n"
                 f"🏠 Агар қўшимча манзил киритмоқчи бўлсангиз, ёзинг.\n"
-                f"❌ Керак бўлмаса, \"Бекор қилиш\" деб ёзинг.",
+                f"❌ Керак бўлмаса, \"Қўшимча манзил керак эмас\" деб ёзинг.",
                 reply_markup=ReplyKeyboardMarkup([
-                    [KeyboardButton("❌ Бекор қилиш")]
+                    [KeyboardButton("❌ Қўшимча манзил керак эмас")]
                 ], resize_keyboard=True)
             )
             context.user_data['awaiting_address'] = True
@@ -596,7 +596,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if 'awaiting_address' in context.user_data and context.user_data['awaiting_address']:
         address = update.message.text
-        if address.lower() == "❌ бекор қилиш" or address.lower() == "бекор қилиш":
+        if address.lower() == "❌ Қўшимча манзил керак эмас" or address.lower() == "Қўшимча манзил керак эмас":
             address = None
         context.user_data['address'] = address
         del context.user_data['awaiting_address']
