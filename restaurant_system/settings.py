@@ -102,7 +102,7 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 # Telegram Bot Settings
-TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', 'BOT_TOKEN') # BotFather dan olingan token
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '7823584139:AAEwKx3qgXrd8df9IwQLC2_OMxoqm7Lsia4') # BotFather dan olingan token
 TELEGRAM_API_BASE_URL = "https://api.telegram.org/bot"
 CHEF_CHAT_ID = int(os.environ.get('CHEF_CHAT_ID', '6963429482'))   # Oshpaz chat ID - O'ZGARTIRING!
 ADMIN_CHAT_ID = int(os.environ.get('ADMIN_CHAT_ID', '8194156959')) # Kuryer/Admin chat ID - O'ZGARTIRING!
