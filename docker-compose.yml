@@ -12,3 +12,12 @@ services:
     environment:
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
+      - BOT_TOKEN=7823584139:AAEwKx3qgXrd8df9IwQLC2_OMxoqm7Lsia4
+
+  bot:
+    build: .
+    container_name: telegram_bot
+    command: python telegram_bot.py
+    restart: always
+    environment:
+      - BOT_TOKEN=7823584139:AAEwKx3qgXrd8df9IwQLC2_OMxoqm7Lsia4
