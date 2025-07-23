@@ -588,7 +588,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🏠 Агар қўшимча манзил киритмоқчи бўлсангиз, ёзинг.\n"
                 f"❌ Керак бўлмаса, \"Бекор қилиш\" деб ёзинг.",
                 reply_markup=ReplyKeyboardMarkup([
-                    [KeyboardButton("❌ Бекор қилиш")]
+                    [KeyboardButton("❌ Қўшимча манзил керак эмас")]
                 ], resize_keyboard=True)
             )
             context.user_data['awaiting_address'] = True
@@ -596,7 +596,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if 'awaiting_address' in context.user_data and context.user_data['awaiting_address']:
         address = update.message.text
-        if address.lower() == "❌ бекор қилиш" or address.lower() == "бекор қилиш":
+        if address.lower() == "❌ Қўшимча манзил керак эмас" or address.lower() == "Қўшимча манзил керак эмас":
             address = None
         context.user_data['address'] = address
         del context.user_data['awaiting_address']
