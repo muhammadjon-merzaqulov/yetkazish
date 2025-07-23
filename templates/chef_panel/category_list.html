@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+
+{% block page_title %}Kategoriyalar{% endblock %}
+
+{% block content %}
+<!-- Add Category Button -->
+<div class="d-flex justify-content-end mb-2"> {# Reduced #}
+    <a href="{% url 'chef_panel:add_category' %}" class="btn btn-success">
+        <i class="fas fa-plus me-2"></i>Kategoriya qo'shish
+    </a>
+</div>
+
+{% if categories %}
+    <!-- Categories Table -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="fas fa-tags me-2"></i>
+                Kategoriyalar ro'yxati
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Nomi</th>
+                            <th>Tavsif</th>
+                            <th>Faol</th>
+                            <th>Yaratilgan vaqti</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for category in categories %}
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-tag me-2 text-muted"></i>
+                                    <strong>{{ category.name }}</strong>
+                                </div>
+                            </td>
+                            <td>{{ category.description|default:"-" }}</td>
+                            <td>
+                                {% if category.is_active %}
+                                    <span class="status-badge bg-success">
+                                        <i class="fas fa-check me-1"></i>Faol
+                                    </span>
+                                {% else %}
+                                    <span class="status-badge bg-danger">
+                                        <i class="fas fa-times me-1"></i>Nofaol
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-clock me-2 text-muted"></i>
+                                    {{ category.created_at|date:"d.m.Y H:i" }}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+{% else %}
+    <!-- Empty State -->
+    <div class="card">
+        <div class="card-body text-center py-3"> {# Reduced #}
+            <i class="fas fa-tags fa-5x text-muted mb-3"></i> {# Reduced #}
+            <h4 class="text-muted mb-3">Kategoriyalar topilmadi</h4>
+            <p class="text-muted mb-3"> {# Reduced #}Hozircha kategoriyalar mavjud emas</p>
+            <a href="{% url 'chef_panel:add_category' %}" class="btn btn-success">
+                <i class="fas fa-plus me-2"></i>Birinchi kategoriyani qo'shing
+            </a>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

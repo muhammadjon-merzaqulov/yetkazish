@@ -1,0 +1,1206 @@
+{% extends 'base.html' %}
+
+{% block page_title %}Yangi buyurtmalar{% endblock %}
+
+{% block content %}
+<!-- Fullscreen overlay -->
+<div id="fullscreen-overlay" class="fullscreen-overlay">
+    {# Removed fullscreen-header as per request #}
+    
+    <div class="fullscreen-content">
+        <div class="orders-container-fullscreen" id="fullscreen-orders-container">
+            <!-- Orders will be populated here -->
+        </div>
+    </div>
+</div>
+
+<!-- Order Detail Popup -->
+<div id="order-detail-popup" class="order-popup">
+    <div class="popup-content">
+        <div class="popup-header">
+            <h5 class="popup-title">
+                <i class="fas fa-receipt me-2"></i>
+                <span id="popup-order-number"></span>
+            </h5>
+            <div class="popup-status" id="popup-status"></div>
+            <button class="btn-close-popup" id="close-popup">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="popup-body">
+            <div class="popup-customer">
+                <h6><i class="fas fa-user me-2"></i>Mijoz ma'lumotlari</h6>
+                <div class="customer-details-popup">
+                    <div class="detail-item">
+                        <span class="label">Ism:</span>
+                        <span class="value" id="popup-customer-name"></span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="label">Telefon:</span>
+                        <span class="value formatted-phone" id="popup-customer-phone"></span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="label">To'lov:</span>
+                        <span class="value" id="popup-payment-method"></span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="label">Manzil:</span>
+                        <span class="value" id="popup-address"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="popup-products">
+                <h6><i class="fas fa-utensils me-2"></i>Mahsulotlar</h6>
+                <div class="products-list-popup" id="popup-products-list">
+                    <!-- Products will be populated here -->
+                </div>
+                <div class="popup-total">
+                    <div class="total-row">
+                        <span>Mahsulotlar:</span>
+                        <span class="formatted-price" id="popup-products-total"></span>
+                    </div>
+                    <div class="total-row">
+                        <span>Yetkazish:</span>
+                        <span class="formatted-price" id="popup-delivery-cost"></span>
+                    </div>
+                    <div class="total-row final-total">
+                        <span>Jami:</span>
+                        <span class="formatted-price" id="popup-total-amount"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="popup-timer">
+            <div class="timer-bar" id="timer-bar"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Normal view -->
+<div id="normal-view">
+    <div class="d-flex justify-content-between align-items-center mb-2"> {# Reduced #}
+        <div class="view-stats">
+            <span class="text-muted">Jami: <strong id="orders-count">{{ orders|length }}</strong> buyurtma</span>
+            <span class="text-muted ms-2"> {# Reduced #}
+                <i class="fas fa-sync-alt me-1" id="refresh-icon"></i>
+                Avtomatik yangilanish
+            </span>
+        </div>
+        <div class="view-controls">
+            <button class="btn btn-primary" id="enterFullscreen">
+                <i class="fas fa-expand me-2"></i>To'liq ekran
+            </button>
+        </div>
+    </div>
+
+    <div class="orders-container" id="new-orders-container">
+        {% for order in orders %}
+        <div class="order-card" data-order-id="{{ order.id }}">
+            <div class="order-header">
+                <div class="order-info">
+                    <div class="order-number">
+                        <i class="fas fa-receipt me-2"></i>
+                        #{{ order.order_number }}
+                    </div>
+                    <div class="order-time">{{ order.created_at|date:"d.m.Y H:i" }}</div> {# Updated to show date and time #}
+                </div>
+                <div class="order-status">
+                    {% if order.status == 'yangi' %}
+                        <span class="status-badge bg-warning">
+                            <i class="fas fa-star me-1"></i>Yangi
+                        </span>
+                    {% elif order.status == 'tasdiqlangan' %}
+                        <span class="status-badge bg-success">
+                            <i class="fas fa-check-circle me-1"></i>Tasdiqlangan
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="order-body">
+                <div class="customer-section">
+                    <div class="customer-info">
+                        <div class="customer-avatar">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <div class="customer-details">
+                            <div class="customer-name">{{ order.customer.full_name }}</div>
+                            <div class="customer-phone">
+                                <i class="fas fa-phone me-2"></i>
+                                <span class="formatted-phone">{{ order.customer.phone_number }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="order-meta">
+                    <div class="meta-row">
+                        <div class="meta-item">
+                            <i class="fas fa-dollar-sign me-2"></i>
+                            <span class="meta-value formatted-price">{{ order.total_amount|floatformat:0 }} so'm</span>
+                        </div>
+                        <div class="meta-item">
+                            <i class="fas fa-clock me-2"></i>
+                            <span class="meta-value">{{ order.created_at|date:"H:i" }}</span>
+                        </div>
+                    </div>
+                    <div class="meta-row">
+                        <div class="meta-item">
+                            <i class="fas fa-credit-card me-2"></i>
+                            <span class="meta-value">{{ order.get_payment_method_display }}</span>
+                        </div>
+                        <div class="meta-item">
+                            <i class="fas fa-map-marker-alt me-2"></i>
+                            <span class="meta-value">
+                                {% if order.address %}{{ order.address|truncatechars:20 }}{% else %}Lokatsiya{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="products-section">
+                    <div class="products-header">
+                        <i class="fas fa-utensils me-2"></i>
+                        <span>Mahsulotlar ({{ order.items.count }})</span>
+                    </div>
+                    <div class="products-list">
+                        {% for item in order.items.all %}
+                        <div class="product-item">
+                            <span class="product-name">{{ item.product.name }}</span>
+                            <span class="product-quantity">{{ item.quantity }}x</span>
+                            <span class="product-price formatted-price">{{ item.total|floatformat:0 }} so'm</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="order-footer">
+                <div class="action-buttons">
+                    <button class="btn btn-primary view-order-details" data-order-id="{{ order.id }}"> {# Changed to button #}
+                        <i class="fas fa-eye me-2"></i>Ko'rish
+                    </button>
+                    {% if order.status == 'yangi' %}
+                        <button class="btn btn-success confirm-order" data-order-id="{{ order.id }}">
+                            <i class="fas fa-check me-2"></i>Tasdiqlash
+                        </button>
+                    {% elif order.status == 'tasdiqlangan' %}
+                        <button class="btn btn-warning ready-order" data-order-id="{{ order.id }}">
+                            <i class="fas fa-utensils me-2"></i>Tayor
+                        </button>
+                    {% endif %}
+                    <button class="btn btn-danger cancel-order" data-order-id="{{ order.id }}">
+                        <i class="fas fa-times me-2"></i>Bekor
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="empty-state">
+            <div class="empty-content">
+                <i class="fas fa-shopping-cart fa-5x text-muted mb-4"></i>
+                <h4 class="text-muted mb-3">Yangi buyurtmalar yo'q</h4>
+                <p class="text-muted">Yangi buyurtmalar kelganda bu yerda ko'rinadi</p>
+                <div class="pulse-animation">
+                    <div class="pulse-dot"></div>
+                    <div class="pulse-dot"></div>
+                    <div class="pulse-dot"></div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+/* Formatted text styles */
+.formatted-phone {
+    font-family: 'Courier New', monospace;
+    font-weight: 700;
+    font-size: 1.1em;
+    letter-spacing: 1px;
+    color: #059669;
+}
+
+.formatted-price {
+    font-family: 'Courier New', monospace;
+    font-weight: 700;
+    font-size: 1.1em;
+    letter-spacing: 0.5px;
+    color: #dc2626;
+}
+
+/* Refresh icon animation */
+#refresh-icon {
+    transition: transform 0.3s ease;
+}
+
+#refresh-icon.spinning {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Fullscreen Styles */
+.fullscreen-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    z-index: 9999;
+    display: none;
+    flex-direction: column;
+}
+
+.fullscreen-overlay.active {
+    display: flex;
+}
+
+/* Removed fullscreen-header styles */
+
+.fullscreen-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.2rem; /* Reduced */
+}
+
+.orders-container-fullscreen {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 0.8rem; /* Reduced */
+}
+
+/* Enhanced fullscreen order cards */
+.fullscreen-overlay .order-card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: var(--radius-xl);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    transition: none; /* Removed transition */
+    overflow: hidden;
+    position: relative;
+}
+
+.fullscreen-overlay .order-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #ff6b6b, #4ecdc4, #45b7d1);
+    transform: scaleX(0);
+    transition: none; /* Removed transition */
+}
+
+/* Remove meta info in fullscreen */
+.fullscreen-overlay .order-meta {
+    display: none;
+}
+
+/* Order Detail Popup */
+.order-popup {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(10px);
+    z-index: 10000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.order-popup.active {
+    display: flex;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.popup-content {
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    border-radius: 20px;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from { 
+        opacity: 0;
+        transform: translateY(50px) scale(0.9);
+    }
+    to { 
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.popup-header {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    color: white;
+    padding: 0.8rem 1.2rem; /* Reduced */
+    border-radius: 20px 20px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.popup-title {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+}
+
+.popup-status .status-badge {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.popup-body {
+    padding: 1.2rem; /* Reduced */
+}
+
+.popup-customer,
+.popup-products {
+    margin-bottom: 1.2rem; /* Reduced */
+}
+
+.popup-customer h6,
+.popup-products h6 {
+    color: #374151;
+    font-weight: 600;
+    margin-bottom: 0.6rem; /* Reduced */
+    display: flex;
+    align-items: center;
+    border-bottom: 2px solid #e5e7eb;
+    padding-bottom: 0.3rem; /* Reduced */
+}
+
+.customer-details-popup {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.6rem; /* Reduced */
+}
+
+.detail-item {
+    background: #f9fafb;
+    padding: 0.6rem; /* Reduced */
+    border-radius: 10px;
+    border: 1px solid #e5e7eb;
+}
+
+.detail-item .label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    display: block;
+    margin-bottom: 0.2rem; /* Reduced */
+}
+
+.detail-item .value {
+    font-size: 1rem;
+    color: #111827;
+    font-weight: 500;
+}
+
+.products-list-popup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem; /* Reduced */
+    margin-bottom: 0.8rem; /* Reduced */
+}
+
+.popup-product-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem; /* Reduced */
+    background: #f9fafb;
+    border-radius: 10px;
+    border: 1px solid #e5e7eb;
+}
+
+.popup-product-name {
+    font-weight: 600;
+    color: #111827;
+    flex: 1;
+}
+
+.popup-product-quantity {
+    font-weight: 700;
+    color: #4f46e5;
+    background: white;
+    padding: 0.4rem 0.8rem; /* Reduced */
+    border-radius: 20px;
+    border: 2px solid #4f46e5;
+    margin: 0 0.8rem; /* Reduced */
+    min-width: 60px;
+    text-align: center;
+}
+
+.popup-product-price {
+    font-weight: 700;
+    color: #059669;
+    min-width: 80px;
+    text-align: right;
+    font-family: 'Courier New', monospace;
+    font-size: 1.1em;
+}
+
+.popup-total {
+    background: #f3f4f6;
+    border-radius: 10px;
+    padding: 0.8rem; /* Reduced */
+    border: 1px solid #d1d5db;
+}
+
+.total-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.3rem 0; /* Reduced */
+    font-size: 1rem;
+}
+
+.total-row:not(:last-child) {
+    border-bottom: 1px solid #d1d5db;
+}
+
+.total-row.final-total {
+    font-weight: 700;
+    font-size: 1.25rem;
+    color: #111827;
+    background: white;
+    margin: 0.6rem -0.8rem -0.8rem; /* Reduced */
+    padding: 0.6rem 0.8rem; /* Reduced */
+    border-radius: 0 0 10px 10px;
+    border-top: 2px solid #4f46e5;
+}
+
+.popup-timer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: #e5e7eb;
+    border-radius: 0 0 20px 20px;
+    overflow: hidden;
+}
+
+.timer-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #4f46e5, #7c3aed);
+    width: 100%;
+    transform-origin: left;
+    animation: countdown 5s linear forwards;
+}
+
+@keyframes countdown {
+    from { transform: scaleX(1); }
+    to { transform: scaleX(0); }
+}
+
+.btn-close-popup {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0;
+    margin-left: auto;
+}
+
+/* Normal view styles */
+.view-controls {
+    display: flex;
+    align-items: center;
+}
+
+.view-stats {
+    font-size: 1rem;
+}
+
+.orders-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 0.8rem; /* Reduced */
+}
+
+.order-card {
+    background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-sm);
+    transition: none; /* Removed transition */
+    overflow: hidden;
+    position: relative;
+}
+
+.order-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--primary-color), var(--success-color), var(--warning-color));
+    transform: scaleX(0);
+    transition: none; /* Removed transition */
+}
+
+.order-header {
+    padding: 0.8rem; /* Reduced */
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.order-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem; /* Reduced */
+}
+
+.order-number {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+}
+
+.order-time {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.order-body {
+    padding: 0.8rem; /* Reduced */
+}
+
+.customer-section {
+    margin-bottom: 0.8rem; /* Reduced */
+}
+
+.customer-info {
+    display: flex;
+    align-items: center;
+    padding: 0.8rem; /* Reduced */
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+}
+
+.customer-avatar {
+    width: 48px; /* Reduced */
+    height: 48px; /* Reduced */
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.25rem;
+    margin-right: 0.6rem; /* Reduced */
+    box-shadow: var(--shadow-sm);
+}
+
+.customer-details {
+    flex: 1;
+}
+
+.customer-name {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.2rem; /* Reduced */
+}
+
+.customer-phone {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+}
+
+.order-meta {
+    margin-bottom: 0.8rem; /* Reduced */
+}
+
+.meta-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem; /* Reduced */
+    margin-bottom: 0.6rem; /* Reduced */
+}
+
+.meta-row:last-child {
+    margin-bottom: 0;
+}
+
+.meta-item {
+    padding: 0.6rem; /* Reduced */
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    font-size: 0.95rem;
+    border: 1px solid var(--border-light);
+    transition: none; /* Removed transition */
+}
+
+.meta-value {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.products-section {
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+    border-radius: var(--radius-lg);
+    padding: 0.8rem; /* Reduced */
+    border: 1px solid var(--border-light);
+}
+
+.products-header {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.6rem; /* Reduced */
+    padding-bottom: 0.3rem; /* Reduced */
+    border-bottom: 2px solid var(--border-light);
+}
+
+.products-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem; /* Reduced */
+}
+
+.product-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem; /* Reduced */
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+    transition: none; /* Removed transition */
+}
+
+.product-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 1rem;
+    flex: 1;
+}
+
+.product-quantity {
+    font-weight: 700;
+    color: var(--primary-color);
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+    padding: 0.4rem 0.8rem; /* Reduced */
+    border-radius: var(--radius-full);
+    font-size: 0.95rem;
+    border: 2px solid var(--primary-color);
+    min-width: 60px;
+    text-align: center;
+    margin: 0 0.6rem; /* Reduced */
+}
+
+.product-price {
+    font-weight: 700;
+    color: var(--success-color);
+    font-size: 1rem;
+    min-width: 80px;
+    text-align: right;
+}
+
+.order-footer {
+    padding: 0.8rem; /* Reduced */
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+    border-top: 1px solid var(--border-color);
+}
+
+.action-buttons {
+    display: flex;
+    gap: 0.4rem; /* Reduced */
+    flex-wrap: wrap;
+}
+
+.action-buttons .btn {
+    flex: 1;
+    min-width: 120px;
+}
+
+.empty-state {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px; /* Reduced */
+    background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    position: relative;
+    overflow: hidden;
+}
+
+.empty-state::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: conic-gradient(from 0deg, transparent, rgba(30, 64, 175, 0.05), transparent);
+    animation: rotate 20s linear infinite;
+}
+
+@keyframes rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.empty-content {
+    text-align: center;
+    padding: 1.5rem; /* Reduced */
+    position: relative;
+    z-index: 2;
+}
+
+.pulse-animation {
+    display: flex;
+    justify-content: center;
+    gap: 0.4rem; /* Reduced */
+    margin-top: 1.2rem; /* Reduced */
+}
+
+.pulse-dot {
+    width: 12px;
+    height: 12px;
+    background: var(--primary-color);
+    border-radius: 50%;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.pulse-dot:nth-child(2) {
+    animation-delay: 0.3s;
+}
+
+.pulse-dot:nth-child(3) {
+    animation-delay: 0.6s;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 0.7; }
+    50% { transform: scale(1.2); opacity: 1; }
+}
+
+.status-badge {
+    padding: 0.4rem 0.8rem;
+    border-radius: var(--radius-full);
+    font-size: 0.875rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.status-badge.bg-warning {
+    background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+    color: #92400e;
+}
+
+.status-badge.bg-success {
+    background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+    color: #065f46;
+}
+
+/* Hide body scroll when fullscreen is active */
+body.fullscreen-active {
+    overflow: hidden;
+}
+
+@media (max-width: 768px) {
+    .orders-container,
+    .orders-container-fullscreen {
+        grid-template-columns: 1fr;
+        gap: 0.8rem; /* Reduced */
+    }
+    
+    .meta-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .action-buttons {
+        flex-direction: column;
+    }
+    
+    .action-buttons .btn {
+        min-width: auto;
+    }
+    
+    .view-controls {
+        flex-direction: column;
+        gap: 0.8rem; /* Reduced */
+        align-items: stretch;
+    }
+    
+    /* Removed fullscreen-header styles for mobile */
+    
+    .fullscreen-controls {
+        justify-content: space-between;
+    }
+    
+    .fullscreen-content {
+        padding: 0.8rem; /* Reduced */
+    }
+    
+    .popup-content {
+        width: 95%;
+        max-height: 90vh;
+    }
+    
+    .customer-details-popup {
+        grid-template-columns: 1fr;
+    }
+    
+    .fullscreen-actions {
+        flex-direction: column;
+        gap: 0.4rem; /* Reduced */
+    }
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // CSRF tokenni AJAX so'rovlariga qo'shish
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    const csrftoken = getCookie('csrftoken');
+
+    $.ajaxSetup({
+        beforeSend: function(xhr, settings) {
+            if (!/^(GET|HEAD|OPTIONS|TRACE)$/.test(settings.type) && !this.crossDomain) {
+                xhr.setRequestHeader("X-CSRFToken", csrftoken);
+            }
+        }
+    });
+
+    // Format phone numbers and prices
+    function formatPhoneNumber(phone) {
+        const cleaned = phone.replace(/\D/g, '');
+        if (cleaned.length === 12 && cleaned.startsWith('998')) {
+            return `+${cleaned.slice(0, 3)} ${cleaned.slice(3, 5)} ${cleaned.slice(5, 8)} ${cleaned.slice(8, 10)} ${cleaned.slice(10)}`;
+        } else if (cleaned.length === 9) {
+            return `+998 ${cleaned.slice(0, 2)} ${cleaned.slice(2, 5)} ${cleaned.slice(5, 7)} ${cleaned.slice(7)}`;
+        }
+        return phone;
+    }
+
+    function formatPrice(price) {
+        return price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    }
+
+    function applyFormatting() {
+        $('.formatted-phone').each(function() {
+            const originalText = $(this).text().trim();
+            if (originalText && !originalText.includes('+')) {
+                $(this).text(formatPhoneNumber(originalText));
+            }
+        });
+
+        $('.formatted-price').each(function() {
+            const originalText = $(this).text().trim();
+            const priceMatch = originalText.match(/(\d+)/);
+            if (priceMatch) {
+                const formattedPrice = formatPrice(priceMatch[1]);
+                $(this).text(originalText.replace(priceMatch[1], formattedPrice));
+            }
+        });
+    }
+
+    applyFormatting();
+
+    // Fullscreen functionality
+    $('#enterFullscreen').click(function() {
+        $('#fullscreen-overlay').addClass('active');
+        $('body').addClass('fullscreen-active');
+        
+        // Copy orders to fullscreen container
+        const ordersHtml = $('#new-orders-container').html();
+        $('#fullscreen-orders-container').html(ordersHtml);
+        
+        setTimeout(applyFormatting, 100);
+    });
+
+    // Removed $('#exitFullscreen').click() and ESC key listener as per request
+
+    // Auto refresh function every 3 seconds
+    function refreshNewOrders() {
+        console.log('Refreshing orders...');
+        
+        // Add spinning animation to refresh icon
+        $('#refresh-icon').addClass('spinning');
+        
+        $.ajax({
+            url: '{% url "chef_panel:new_orders" %}',
+            type: 'GET',
+            success: function(data) {
+                var tempDiv = $('<div>').html(data);
+                var updatedContent = tempDiv.find('#new-orders-container').html();
+                var updatedCount = tempDiv.find('#orders-count').text();
+                
+                // Update orders count
+                $('#orders-count').text(updatedCount);
+                
+                // Update normal view
+                $('#new-orders-container').html(updatedContent);
+                
+                // Update fullscreen container if active
+                if ($('#fullscreen-overlay').hasClass('active')) {
+                    $('#fullscreen-orders-container').html(updatedContent);
+                }
+                
+                // Apply formatting to new content
+                applyFormatting();
+                
+                console.log('Orders refreshed successfully!');
+            },
+            error: function(jqXHR, textStatus, errorThrown) {
+                console.error('Error refreshing orders:', textStatus, errorThrown);
+            },
+            complete: function() {
+                // Remove spinning animation
+                $('#refresh-icon').removeClass('spinning');
+            }
+        });
+    }
+
+    // Start auto refresh every 3 seconds
+    setInterval(refreshNewOrders, 3000);
+
+    // Enhanced button click handlers with loading states
+    $(document).on('click', '.confirm-order', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        var orderId = $(this).data('order-id');
+        var button = $(this);
+        var originalText = button.html();
+        
+        console.log('Confirming order:', orderId);
+        
+        button.html('<i class="fas fa-spinner fa-spin me-2"></i>Tasdiqlanyapti...').prop('disabled', true);
+        
+        $.ajax({
+            url: '{% url "chef_panel:confirm_order" 0 %}'.replace('0', orderId),
+            type: 'POST',
+            headers: {
+                'X-CSRFToken': csrftoken
+            },
+            success: function(data) {
+                console.log('Confirm response:', data);
+                if (data.success) {
+                    button.html('<i class="fas fa-check me-2"></i>Tasdiqlandi!')
+                          .removeClass('btn-success')
+                          .addClass('btn-secondary');
+                    // Refresh will happen automatically in 3 seconds
+                } else {
+                    alert(data.message || 'Xatolik yuz berdi');
+                    button.html(originalText).prop('disabled', false);
+                }
+            },
+            error: function(jqXHR, textStatus, errorThrown) {
+                console.error('Confirm error:', jqXHR, textStatus, errorThrown);
+                alert("Xato yuz berdi: " + (jqXHR.responseJSON ? jqXHR.responseJSON.message : textStatus));
+                button.html(originalText).prop('disabled', false);
+            }
+        });
+    });
+
+    $(document).on('click', '.ready-order', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        var orderId = $(this).data('order-id');
+        var button = $(this);
+        var originalText = button.html();
+        
+        console.log('Marking order ready:', orderId);
+        
+        button.html('<i class="fas fa-spinner fa-spin me-2"></i>Tayyorlanmoqda...').prop('disabled', true);
+        
+        $.ajax({
+            url: '{% url "chef_panel:mark_ready" 0 %}'.replace('0', orderId),
+            type: 'POST',
+            headers: {
+                'X-CSRFToken': csrftoken
+            },
+            success: function(data) {
+                console.log('Ready response:', data);
+                if (data.success) {
+                    button.html('<i class="fas fa-check me-2"></i>Tayor!')
+                          .removeClass('btn-warning')
+                          .addClass('btn-secondary');
+                    // Refresh will happen automatically in 3 seconds
+                } else {
+                    alert(data.message || 'Xatolik yuz berdi');
+                    button.html(originalText).prop('disabled', false);
+                }
+            },
+            error: function(jqXHR, textStatus, errorThrown) {
+                console.error('Ready error:', jqXHR, textStatus, errorThrown);
+                alert("Xato yuz berdi: " + (jqXHR.responseJSON ? jqXHR.responseJSON.message : textStatus));
+                button.html(originalText).prop('disabled', false);
+            }
+        });
+    });
+
+    $(document).on('click', '.cancel-order', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        var orderId = $(this).data('order-id');
+        var button = $(this);
+        var originalText = button.html();
+        
+        if (confirm('Buyurtmani bekor qilishni xohlaysizmi?')) {
+            console.log('Cancelling order:', orderId);
+            
+            button.html('<i class="fas fa-spinner fa-spin me-2"></i>Bekor qilinyapti...').prop('disabled', true);
+            
+            $.ajax({
+                url: '{% url "chef_panel:cancel_order" 0 %}'.replace('0', orderId),
+                type: 'POST',
+                headers: {
+                    'X-CSRFToken': csrftoken
+                },
+                success: function(data) {
+                    console.log('Cancel response:', data);
+                    if (data.success) {
+                        button.html('<i class="fas fa-times me-2"></i>Bekor qilindi!')
+                              .removeClass('btn-danger')
+                              .addClass('btn-secondary');
+                        // Refresh will happen automatically in 3 seconds
+                    } else {
+                        alert(data.message || 'Xatolik yuz berdi');
+                        button.html(originalText).prop('disabled', false);
+                    }
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                    console.error('Cancel error:', jqXHR, textStatus, errorThrown);
+                    alert("Xato yuz berdi: " + (jqXHR.responseJSON ? jqXHR.responseJSON.message : textStatus));
+                    button.html(originalText).prop('disabled', false);
+                }
+            });
+        }
+    });
+
+    // Handle "Ko'rish" button click to show order details in popup
+    $(document).on('click', '.view-order-details', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        var orderId = $(this).data('order-id');
+        console.log('Viewing order details for:', orderId);
+
+        $.ajax({
+            url: '{% url "chef_panel:get_order_details_api" 0 %}'.replace('0', orderId),
+            type: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    const order = response.order;
+                    
+                    $('#popup-order-number').text(`#${order.order_number}`);
+                    $('#popup-status').html(`<span class="status-badge bg-${order.status === 'yangi' ? 'warning' : 'success'}">
+                                                <i class="fas fa-${order.status === 'yangi' ? 'star' : 'check-circle'} me-1"></i>${order.status_display}
+                                            </span>`);
+                    $('#popup-customer-name').text(order.customer.full_name);
+                    $('#popup-customer-phone').text(order.customer.phone_number);
+                    $('#popup-payment-method').text(order.payment_method_display);
+                    $('#popup-address').text(order.address || 'Lokatsiya');
+
+                    let productsListHtml = '';
+                    order.items.forEach(item => {
+                        productsListHtml += `
+                            <div class="popup-product-item">
+                                <span class="popup-product-name">${item.product_name}</span>
+                                <span class="popup-product-quantity">${item.quantity}x</span>
+                                <span class="popup-product-price formatted-price">${formatPrice(item.total)} so'm</span>
+                            </div>
+                        `;
+                    });
+                    $('#popup-products-list').html(productsListHtml);
+
+                    $('#popup-products-total').text(`${formatPrice(order.products_total)} so'm`);
+                    $('#popup-delivery-cost').text(`${formatPrice(order.delivery_cost)} so'm`);
+                    $('#popup-total-amount').text(`${formatPrice(order.total_amount)} so'm`);
+
+                    // Apply formatting to newly added content
+                    applyFormatting();
+
+                    $('#order-detail-popup').addClass('active');
+                    $('body').addClass('fullscreen-active'); // Keep body scroll hidden
+                } else {
+                    alert(response.message || 'Buyurtma tafsilotlarini yuklashda xato yuz berdi.');
+                }
+            },
+            error: function(jqXHR, textStatus, errorThrown) {
+                console.error('Error fetching order details:', jqXHR, textStatus, errorThrown);
+                alert("Buyurtma tafsilotlarini yuklashda xato yuz berdi: " + (jqXHR.responseJSON ? jqXHR.responseJSON.message : textStatus));
+            }
+        });
+    });
+
+    // Close popup functionality
+    $('#close-popup').click(function() {
+        $('#order-detail-popup').removeClass('active');
+        $('body').removeClass('fullscreen-active');
+    });
+});
+</script>
+{% endblock %}

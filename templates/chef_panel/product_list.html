@@ -1,0 +1,228 @@
+{% extends 'base.html' %}
+
+{% block page_title %}Mahsulotlar{% endblock %}
+
+{% block content %}
+<!-- Add Product Button -->
+<div class="d-flex justify-content-end mb-4">
+    <a href="{% url 'chef_panel:add_product' %}" class="btn btn-success">
+        <i class="fas fa-plus me-2"></i>Mahsulot qo'shish
+    </a>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="fas fa-filter me-2"></i>
+            Filterlar
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-6">
+                <label for="category_filter" class="form-label">Kategoriya bo'yicha filter</label>
+                <select name="category" id="category_filter" class="form-select">
+                    <option value="">Barchasi</option>
+                    {% for category in categories %}
+                        <option value="{{ category.id }}" {% if selected_category == category.id %}selected{% endif %}>{{ category.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6 d-flex align-items-end">
+                <div class="d-flex gap-2 w-100">
+                    <button type="submit" class="btn btn-primary flex-fill">
+                        <i class="fas fa-search me-2"></i>Filterlash
+                    </button>
+                    <a href="{% url 'chef_panel:product_list' %}" class="btn btn-secondary flex-fill">
+                        <i class="fas fa-refresh me-2"></i>Tozalash
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if products %}
+    <!-- Products Grid -->
+    <div class="products-grid">
+        {% for product in products %}
+        <div class="product-card">
+            <div class="product-image">
+                {% if product.image %}
+                    <img src="{{ product.image.url }}" alt="{{ product.name }}" class="img-fluid">
+                {% else %}
+                    <div class="no-image">
+                        <i class="fas fa-image fa-3x text-muted"></i>
+                    </div>
+                {% endif %}
+                <div class="product-overlay">
+                    <a href="{% url 'chef_panel:edit_product' product.id %}" class="btn btn-warning btn-sm">
+                        <i class="fas fa-edit me-1"></i>Tahrirlash
+                    </a>
+                </div>
+            </div>
+            <div class="product-info">
+                <h6 class="product-name">{{ product.name }}</h6>
+                <div class="product-category">
+                    <i class="fas fa-tag me-1"></i>{{ product.category.name }}
+                </div>
+                <div class="product-price">{{ product.price|floatformat:0 }} so'm</div>
+                <div class="product-status">
+                    {% if product.is_available %}
+                        <span class="status-badge bg-success">
+                            <i class="fas fa-check me-1"></i>Mavjud
+                        </span>
+                    {% else %}
+                        <span class="status-badge bg-danger">
+                            <i class="fas fa-times me-1"></i>Mavjud emas
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <!-- Empty State -->
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <i class="fas fa-box fa-5x text-muted mb-4"></i>
+            <h4 class="text-muted mb-3">Mahsulotlar topilmadi</h4>
+            <p class="text-muted mb-4">Hozircha mahsulotlar mavjud emas yoki filter shartlariga mos kelmadilar</p>
+            <a href="{% url 'chef_panel:add_product' %}" class="btn btn-success">
+                <i class="fas fa-plus me-2"></i>Birinchi mahsulotni qo'shing
+            </a>
+        </div>
+    </div>
+{% endif %}
+
+<style>
+.products-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 2rem;
+}
+
+.product-card {
+    background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-sm);
+    transition: var(--transition-normal);
+    overflow: hidden;
+    position: relative;
+}
+
+.product-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary-color), var(--success-color));
+    transform: scaleX(0);
+    transition: transform var(--transition-normal);
+}
+
+.product-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-xl);
+}
+
+.product-card:hover::before {
+    transform: scaleX(1);
+}
+
+.product-image {
+    height: 220px;
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+}
+
+.product-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: var(--transition-normal);
+}
+
+.product-card:hover .product-image img {
+    transform: scale(1.05);
+}
+
+.no-image {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+}
+
+.product-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: var(--transition-normal);
+}
+
+.product-card:hover .product-overlay {
+    opacity: 1;
+}
+
+.product-info {
+    padding: 1.75rem;
+}
+
+.product-name {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.75rem;
+    line-height: 1.3;
+}
+
+.product-category {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+}
+
+.product-price {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--success-color);
+    margin-bottom: 1rem;
+}
+
+.product-status {
+    display: flex;
+    justify-content: center;
+}
+
+@media (max-width: 768px) {
+    .products-grid {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 1.5rem;
+    }
+    
+    .d-flex.gap-2 {
+        flex-direction: column;
+        gap: 0.5rem !important;
+    }
+}
+</style>
+{% endblock %}

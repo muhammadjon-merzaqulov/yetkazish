@@ -1,0 +1,210 @@
+{% extends 'base.html' %}
+
+{% block page_title %}Barcha buyurtmalar{% endblock %}
+
+{% block content %}
+<!-- Filters -->
+<div class="card mb-2"> {# Reduced #}
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="fas fa-filter me-2"></i>
+            Filterlar
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="GET" class="row g-1"> {# Reduced #}
+            <div class="col-md-4">
+                <label for="status_filter" class="form-label">Holat bo'yicha filter</label>
+                <select name="status" id="status_filter" class="form-select">
+                    <option value="">Barchasi</option>
+                    {% for status_value, status_label in status_choices %}
+                        <option value="{{ status_value }}" {% if status_filter == status_value %}selected{% endif %}>{{ status_label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label for="search_input" class="form-label">Qidiruv</label>
+                <input type="text" name="search" id="search_input" class="form-control" placeholder="Buyurtma #, Mijoz FIO, Telefon" value="{{ search }}">
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
+                <div class="d-flex gap-1 w-100">
+                    <button type="submit" class="btn btn-primary flex-fill">
+                        <i class="fas fa-search me-2"></i>Filterlash
+                    </button>
+                    <a href="{% url 'chef_panel:order_list' %}" class="btn btn-secondary flex-fill">
+                        <i class="fas fa-refresh me-2"></i>Tozalash
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if page_obj %}
+    <!-- Orders Table -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="fas fa-list me-2"></i>
+                Buyurtmalar ro'yxati
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Buyurtma #</th>
+                            <th>Mijoz</th>
+                            <th>Telefon</th>
+                            <th>Summa</th>
+                            <th>Holat</th>
+                            <th>Vaqt</th>
+                            <th>Amallar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for order in page_obj %}
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-receipt me-2 text-muted"></i>
+                                    <strong>{{ order.order_number }}</strong>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="customer-avatar-sm me-2">
+                                        <i class="fas fa-user"></i>
+                                    </div>
+                                    {{ order.customer.full_name }}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-phone me-2 text-muted"></i>
+                                    {{ order.customer.phone_number }}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-dollar-sign me-2 text-muted"></i>
+                                    <strong>{{ order.total_amount|floatformat:0 }} so'm</strong>
+                                </div>
+                            </td>
+                            <td>
+                                {% if order.status == 'yangi' %}
+                                    <span class="status-badge bg-warning">
+                                        <i class="fas fa-star me-1"></i>Yangi
+                                    </span>
+                                {% elif order.status == 'tasdiqlangan' %}
+                                    <span class="status-badge bg-success">
+                                        <i class="fas fa-check-circle me-1"></i>Tasdiqlangan
+                                    </span>
+                                {% elif order.status == 'tayor' %}
+                                    <span class="status-badge bg-info">
+                                        <i class="fas fa-utensils me-1"></i>Tayor
+                                    </span>
+                                {% elif order.status == 'yolda' %}
+                                    <span class="status-badge bg-info">
+                                        <i class="fas fa-truck me-1"></i>Yo'lda
+                                    </span>
+                                {% elif order.status == 'yetkazildi' %}
+                                    <span class="status-badge bg-secondary">
+                                        <i class="fas fa-check-double me-1"></i>Yetkazildi
+                                    </span>
+                                {% elif order.status == 'bekor_qilingan' %}
+                                    <span class="status-badge bg-danger">
+                                        <i class="fas fa-times me-1"></i>Bekor qilingan
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-clock me-2 text-muted"></i>
+                                    {{ order.created_at|date:"d.m.Y H:i" }}
+                                </div>
+                            </td>
+                            <td>
+                                <a href="{% url 'chef_panel:order_detail' order.id %}" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-eye me-1"></i>Ko'rish
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    <nav aria-label="Page navigation" class="mt-3"> {# Reduced #}
+        <ul class="pagination">
+            {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}&status={{ status_filter }}&search={{ search }}">
+                        <i class="fas fa-chevron-left me-2"></i>Oldingi
+                    </a>
+                </li>
+            {% endif %}
+            
+            <li class="page-item active">
+                <span class="page-link">
+                    {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+                </span>
+            </li>
+            
+            {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}&status={{ status_filter }}&search={{ search }}">
+                        Keyingi<i class="fas fa-chevron-right ms-2"></i>
+                    </a>
+                </li>
+            {% endif %}
+        </ul>
+    </nav>
+{% else %}
+    <!-- Empty State -->
+    <div class="card">
+        <div class="card-body text-center py-3"> {# Reduced #}
+            <i class="fas fa-search fa-4x text-muted mb-3"></i>
+            <h4 class="text-muted mb-3">Buyurtmalar topilmadi</h4>
+            <p class="text-muted mb-3"> {# Reduced #}Qidiruv shartlaringizga mos buyurtmalar mavjud emas</p>
+            <a href="{% url 'chef_panel:order_list' %}" class="btn btn-primary">
+                <i class="fas fa-refresh me-2"></i>Barchasini ko'rish
+            </a>
+        </div>
+    </div>
+{% endif %}
+
+<style>
+.customer-avatar-sm {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 0.875rem;
+    box-shadow: var(--shadow-xs);
+}
+
+@media (max-width: 768px) {
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+    
+    .d-flex.gap-2 {
+        flex-direction: column;
+        gap: 0.5rem !important;
+    }
+    
+    .flex-fill {
+        width: 100%;
+    }
+}
+</style>
+{% endblock %}
