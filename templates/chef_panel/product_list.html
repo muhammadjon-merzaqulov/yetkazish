@@ -3,6 +3,8 @@
 {% block page_title %}Mahsulotlar{% endblock %}
 
 {% block content %}
+<div id="message-container"></div> {# New container for messages #}
+
 <!-- Add Product Button -->
 <div class="d-flex justify-content-end mb-4">
     <a href="{% url 'chef_panel:add_product' %}" class="btn btn-success">
@@ -69,15 +71,16 @@
                 </div>
                 <div class="product-price">{{ product.price|floatformat:0 }} so'm</div>
                 <div class="product-status">
-                    {% if product.is_available %}
-                        <span class="status-badge bg-success">
+                    <button type="button" 
+                            class="status-badge js-toggle-availability {% if product.is_available %}bg-success{% else %}bg-danger{% endif %}"
+                            data-product-id="{{ product.id }}"
+                            data-is-available="{{ product.is_available|yesno:'true,false' }}">
+                        {% if product.is_available %}
                             <i class="fas fa-check me-1"></i>Mavjud
-                        </span>
-                    {% else %}
-                        <span class="status-badge bg-danger">
+                        {% else %}
                             <i class="fas fa-times me-1"></i>Mavjud emas
-                        </span>
-                    {% endif %}
+                        {% endif %}
+                    </button>
                 </div>
             </div>
         </div>
@@ -213,6 +216,30 @@
     justify-content: center;
 }
 
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    color: white;
+    cursor: pointer; /* Indicate it's clickable */
+    border: none; /* Remove button default border */
+    transition: background-color 0.2s ease-in-out;
+}
+
+.status-badge.bg-success {
+    background-color: var(--success-color);
+}
+
+.status-badge.bg-danger {
+    background-color: var(--danger-color);
+}
+
+.status-badge:hover {
+    opacity: 0.9;
+}
+
 @media (max-width: 768px) {
     .products-grid {
         grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -225,4 +252,66 @@
     }
 }
 </style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const toggleButtons = document.querySelectorAll('.js-toggle-availability');
+        const messageContainer = document.getElementById('message-container'); // Get the new container
+
+        toggleButtons.forEach(button => {
+            button.addEventListener('click', async function() {
+                const productId = this.dataset.productId;
+                const isAvailable = this.dataset.isAvailable === 'true';
+                const newStatus = !isAvailable;
+
+                const url = `/chef_panel/api/products/${productId}/toggle-availability/`;
+
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            // X-CSRFToken is not needed because the view is @csrf_exempt
+                        },
+                        body: JSON.stringify({ is_available: newStatus })
+                    });
+
+                    if (!response.ok) {
+                        // If response is not OK (e.g., 404, 500), read the text and throw an error
+                        const errorText = await response.text();
+                        throw new Error(`Server xatosi: ${response.status} ${response.statusText} - ${errorText}`);
+                    }
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        // Update button text and class
+                        this.dataset.isAvailable = newStatus ? 'true' : 'false';
+                        this.classList.remove(newStatus ? 'bg-danger' : 'bg-success');
+                        this.classList.add(newStatus ? 'bg-success' : 'bg-danger');
+                        this.innerHTML = newStatus 
+                            ? '<i class="fas fa-check me-1"></i>Mavjud' 
+                            : '<i class="fas fa-times me-1"></i>Mavjud emas';
+                        
+                        // Show a temporary success message
+                        const messageDiv = document.createElement('div');
+                        messageDiv.className = 'alert alert-success alert-dismissible fade show mt-3';
+                        messageDiv.setAttribute('role', 'alert');
+                        messageDiv.innerHTML = `
+                            ${data.message}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        `;
+                        messageContainer.prepend(messageDiv); // Prepend to the new container
+                        setTimeout(() => messageDiv.remove(), 3000); // Remove after 3 seconds
+                    } else {
+                        alert('Xato: ' + data.message);
+                    }
+                } catch (error) {
+                    console.error('Mahsulot mavjudligini yangilashda xato:', error);
+                    alert('Server bilan bog\'lanishda xato yuz berdi: ' + error.message); // Show more specific error
+                }
+            });
+        });
+    });
+</script>
 {% endblock %}
