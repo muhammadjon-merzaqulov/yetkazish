@@ -5,7 +5,7 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('dilkashadmin1234/', admin.site.urls),
-    path('', include('chef_panel.urls')),
+    path('chef_panel/', include('chef_panel.urls')),
 ]
 
 if settings.DEBUG:
