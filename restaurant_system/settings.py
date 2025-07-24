@@ -106,3 +106,5 @@ TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '7823584139:AAEwKx3qgX
 TELEGRAM_API_BASE_URL = "https://api.telegram.org/bot"
 CHEF_CHAT_ID = int(os.environ.get('CHEF_CHAT_ID', '6963429482'))   # Oshpaz chat ID - O'ZGARTIRING!
 ADMIN_CHAT_ID = int(os.environ.get('ADMIN_CHAT_ID', '8194156959')) # Kuryer/Admin chat ID - O'ZGARTIRING!
+SITE_URL = "http://13.60.32.150:8000"
+
