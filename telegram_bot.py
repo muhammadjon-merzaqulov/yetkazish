@@ -111,7 +111,7 @@ def load_data():
         bot_settings, created = BotSettings.objects.get_or_create(
             pk=1, # Use a fixed primary key to ensure only one instance
             defaults={
-                'service_start_time': datetime.time(90, 0),  # 10:00
+                'service_start_time': datetime.time(9, 0),  # 09:00
                 'service_end_time': datetime.time(22, 0),    # 22:00
                 'delivery_base_cost': 5000,
                 'delivery_cost_per_extra_km_block': 5000,
@@ -141,6 +141,7 @@ def _update_telegram_messages(order, old_status, new_status, changed_by_user=Non
         "tayor": "🍽",
         "yolda": "🚚",
         "yetkazildi": "✅",
+        "olib_ketildi": "✅",
         "bekor_qilingan": "❌"
     }
     emoji = status_emoji.get(new_status, "📋")
@@ -151,12 +152,18 @@ def _update_telegram_messages(order, old_status, new_status, changed_by_user=Non
     user_text += f"👨‍💼 Исм: {order.customer.full_name}\n"
     user_text += f"📱 Телефон: {order.customer.phone_number}\n"
     user_text += f"💳 Тўлов усули: {order.get_payment_method_display()}\n"
-    if order.address:
-        user_text += f"🏠 Манзил: {order.address}\n"
+    user_text += f"🚀 Хизмат тури: {order.get_service_type_display()}\n"
+    
+    if order.service_type == 'delivery':
+        if order.address:
+            user_text += f"🏠 Манзил: {order.address}\n"
+        else:
+            user_text += "📍 Манзил: Фақат локация\n"
+        if order.latitude and order.longitude:
+            user_text += f"📍 Локация: https://www.google.com/maps?q={order.latitude},{order.longitude}\n"
     else:
-        user_text += "📍 Манзил: Фақат локация\n"
-    if order.latitude and order.longitude:
-        user_text += f"📍 Локация: https://www.google.com/maps?q={order.latitude},{order.longitude}\n"
+        user_text += "🏪 Олиб кетиш учун: Ресторандан\n"
+    
     user_text += f"\n🍽 **Маҳсулотлар:**\n"
     for item in list(order.items.all()): # Convert queryset to list in sync context
         user_text += f"• {item.quantity} дона {item.product.name} - {item.total:,} сўм\n"
@@ -190,10 +197,16 @@ def _update_telegram_messages(order, old_status, new_status, changed_by_user=Non
         chef_text += f"👨‍💼 Исм: {order.customer.full_name}\n"
         chef_text += f"📱 Телефон: {order.customer.phone_number}\n"
         chef_text += f"💳 Тўлов усули: {order.get_payment_method_display()}\n"
-        if order.address:
-            chef_text += f"🏠 Манзил: {order.address}\n"
+        chef_text += f"🚀 Хизмат тури: {order.get_service_type_display()}\n"
+        
+        if order.service_type == 'delivery':
+            if order.address:
+                chef_text += f"🏠 Манзил: {order.address}\n"
+            else:
+                chef_text += "📍 Манзил: Фақат локация\n"
         else:
-            chef_text += "📍 Манзил: Фақат локация\n"
+            chef_text += "🏪 Олиб кетиш учун: Ресторандан\n"
+            
         chef_text += f"\n🍽 **Маҳсулотлар:**\n"
         for item in list(order.items.all()): # Convert queryset to list in sync context
             chef_text += f"• {item.quantity} дона {item.product.name} - {item.total:,} сўм\n"
@@ -210,7 +223,12 @@ def _update_telegram_messages(order, old_status, new_status, changed_by_user=Non
                 [{'text': "🍽 Тайёр", 'callback_data': f"chef_ready:{order.id}"}],
                 [{'text': "❌ Бекор қилиш", 'callback_data': f"chef_cancel:{order.id}"}]
             ]
-        # If status is 'tayor', 'yolda', 'yetkazildi', 'bekor_qilingan', no more actions for chef
+        elif new_status == 'tayor' and order.service_type == 'pickup':
+            chef_keyboard = [
+                [{'text': "✅ Олиб кетилди", 'callback_data': f"chef_picked_up:{order.id}"}],
+                [{'text': "❌ Бекор қилиш", 'callback_data': f"chef_cancel:{order.id}"}]
+            ]
+        # If status is 'tayor' (delivery), 'yolda', 'yetkazildi', 'olib_ketildi', 'bekor_qilingan', no more actions for chef
         
         send_telegram_message(
             chat_id=settings.CHEF_CHAT_ID,
@@ -219,72 +237,73 @@ def _update_telegram_messages(order, old_status, new_status, changed_by_user=Non
             message_id=order.chef_message_id
         )
 
-    # Kuryer xabarini yangilash (agar mavjud bo'lsa)
-    if order.courier_message_id:
-        courier_text = f"{emoji} **Буюртма #{order.order_number} ҳолати ўзгарди: {order.get_status_display()}**\n\n"
-        courier_text += f"👨‍💼 Исм: {order.customer.full_name}\n"
-        courier_text += f"📱 Телефон: {order.customer.phone_number}\n"
-        courier_text += f"💳 Тўлов усули: {order.get_payment_method_display()}\n"
-        if order.address:
-            courier_text += f"🏠 Манзил: {order.address}\n"
-        else:
-            courier_text += "📍 Манзил: Фақат локация\n"
-        courier_text += f"\n🍽 **Маҳсулотлар:**\n"
-        for item in list(order.items.all()): # Convert queryset to list in sync context
-            courier_text += f"• {item.quantity} дона {item.product.name} - {item.total:,} сўм\n"
-        courier_text += f"\n💰 Жами: {order.total_amount:,} сўм"
+    # Kuryer xabarini yangilash (faqat delivery uchun)
+    if order.service_type == 'delivery':
+        if order.courier_message_id:
+            courier_text = f"{emoji} **Буюртма #{order.order_number} ҳолати ўзгарди: {order.get_status_display()}**\n\n"
+            courier_text += f"👨‍💼 Исм: {order.customer.full_name}\n"
+            courier_text += f"📱 Телефон: {order.customer.phone_number}\n"
+            courier_text += f"💳 Тўлов усули: {order.get_payment_method_display()}\n"
+            if order.address:
+                courier_text += f"🏠 Манзил: {order.address}\n"
+            else:
+                courier_text += "📍 Манзил: Фақат локация\n"
+            courier_text += f"\n🍽 **Маҳсулотлар:**\n"
+            for item in list(order.items.all()): # Convert queryset to list in sync context
+                courier_text += f"• {item.quantity} дона {item.product.name} - {item.total:,} сўм\n"
+            courier_text += f"\n💰 Жами: {order.total_amount:,} сўм"
 
-        courier_keyboard = []
-        if new_status == 'tayor':
+            courier_keyboard = []
+            if new_status == 'tayor':
+                courier_keyboard = [
+                    [{'text': "🚚 Йўлда", 'callback_data': f"courier_on_way:{order.id}"}],
+                    [{'text': "❌ Бекор қилиш", 'callback_data': f"courier_cancel:{order.id}"}]
+                ]
+            elif new_status == 'yolda':
+                courier_keyboard = [
+                    [{'text': "✅ Етказилди", 'callback_data': f"courier_delivered:{order.id}"}],
+                    [{'text': "❌ Бекор қилиш", 'callback_data': f"courier_cancel:{order.id}"}]
+                ]
+            
+            send_telegram_message(
+                chat_id=settings.ADMIN_CHAT_ID, # Assuming ADMIN_CHAT_ID is courier's chat ID
+                text=courier_text,
+                reply_markup={'inline_keyboard': courier_keyboard},
+                message_id=order.courier_message_id
+            )
+        elif new_status == 'tayor': # If order is ready, send new message to courier if no existing message_id
+            courier_text = f"🚚 **Етказиб бериш учун янги буюртма #{order.order_number}**\n\n"
+            courier_text += f"👨‍💼 Исм: {order.customer.full_name}\n"
+            courier_text += f"📱 Телефон: {order.customer.phone_number}\n"
+            courier_text += f"💳 Тўлов усули: {order.get_payment_method_display()}\n"
+            if order.address:
+                courier_text += f"🏠 Манзил: {order.address}\n"
+            else:
+                courier_text += "📍 Манзил: Фақат локация\n"
+            courier_text += f"\n🍽 **Маҳсулотлар:**\n"
+            for item in list(order.items.all()): # Convert queryset to list in sync context
+                courier_text += f"• {item.quantity} дона {item.product.name} - {item.total:,} сўм\n"
+            courier_text += f"\n💰 Жами: {order.total_amount:,} сўм"
+
             courier_keyboard = [
                 [{'text': "🚚 Йўлда", 'callback_data': f"courier_on_way:{order.id}"}],
                 [{'text': "❌ Бекор қилиш", 'callback_data': f"courier_cancel:{order.id}"}]
             ]
-        elif new_status == 'yolda':
-            courier_keyboard = [
-                [{'text': "✅ Етказилди", 'callback_data': f"courier_delivered:{order.id}"}],
-                [{'text': "❌ Бекор қилиш", 'callback_data': f"courier_cancel:{order.id}"}]
-            ]
-        
-        send_telegram_message(
-            chat_id=settings.ADMIN_CHAT_ID, # Assuming ADMIN_CHAT_ID is courier's chat ID
-            text=courier_text,
-            reply_markup={'inline_keyboard': courier_keyboard},
-            message_id=order.courier_message_id
-        )
-    elif new_status == 'tayor': # If order is ready, send new message to courier if no existing message_id
-        courier_text = f"🚚 **Етказиб бериш учун янги буюртма #{order.order_number}**\n\n"
-        courier_text += f"👨‍💼 Исм: {order.customer.full_name}\n"
-        courier_text += f"📱 Телефон: {order.customer.phone_number}\n"
-        courier_text += f"💳 Тўлов усули: {order.get_payment_method_display()}\n"
-        if order.address:
-            courier_text += f"🏠 Манзил: {order.address}\n"
-        else:
-            courier_text += "📍 Манзил: Фақат локация\n"
-        courier_text += f"\n🍽 **Маҳсулотлар:**\n"
-        for item in list(order.items.all()): # Convert queryset to list in sync context
-            courier_text += f"• {item.quantity} дона {item.product.name} - {item.total:,} сўм\n"
-        courier_text += f"\n💰 Жами: {order.total_amount:,} сўм"
-
-        courier_keyboard = [
-            [{'text': "🚚 Йўлда", 'callback_data': f"courier_on_way:{order.id}"}],
-            [{'text': "❌ Бекор қилиш", 'callback_data': f"courier_cancel:{order.id}"}]
-        ]
-        courier_msg_response = send_telegram_message(
-            chat_id=settings.ADMIN_CHAT_ID,
-            text=courier_text,
-            reply_markup={'inline_keyboard': courier_keyboard}
-        )
-        if courier_msg_response and courier_msg_response.get('ok'):
-            order.courier_message_id = courier_msg_response['result']['message_id']
-            order.save()
-        
-        if order.latitude and order.longitude:
-            send_telegram_location(
+            courier_msg_response = send_telegram_message(
                 chat_id=settings.ADMIN_CHAT_ID,
-                latitude=order.latitude,
-                longitude=order.longitude
+                text=courier_text,
+                reply_markup={'inline_keyboard': courier_keyboard}
             )
+            if courier_msg_response and courier_msg_response.get('ok'):
+                order.courier_message_id = courier_msg_response['result']['message_id']
+                order.save()
+            
+            if order.latitude and order.longitude:
+                send_telegram_location(
+                    chat_id=settings.ADMIN_CHAT_ID,
+                    latitude=order.latitude,
+                    longitude=order.longitude
+                )
 
 # ----------------------------------------------------
 # 1) Masofa va yetkazib berish narxi hisoblash
@@ -370,20 +389,25 @@ def build_cart_message(user_savat, context):
 
     text += f"\n💰 Маҳсулотлар: {total:,} сўм\n"
 
-    # Yetkazib berish narxini context dan olamiz:
-    delivery_possible = context.user_data.get('delivery_possible', None)
-    if delivery_possible is False:
-        # Use bot_settings for max radius in message
-        text += f"🚫 Етказиб бериш: Мавжуд эмас (10 км дан узоқ)\n"
+    # Service type va delivery cost
+    service_type = context.user_data.get('service_type', 'delivery')
+    if service_type == 'pickup':
+        text += f"🏪 Олиб кетиш: Бепул\n"
         text += f"📊 Жами: {total:,} сўм\n"
     else:
-        delivery_cost = context.user_data.get('delivery_cost')
-        if delivery_cost:
-            text += f"🚚 Етказиб бериш: {delivery_cost:,} сўм\n"
-            text += f"📊 Жами: {total + delivery_cost:,} сўм\n"
+        # Yetkazib berish narxini context dan olamiz:
+        delivery_possible = context.user_data.get('delivery_possible', None)
+        if delivery_possible is False:
+            text += f"🚫 Етказиб бериш: Мавжуд эмас (10 км дан узоқ)\n"
+            text += f"📊 Жами: {total:,} сўм\n"
         else:
-            text += "📍 Етказиб бериш: Локация киритилмаган\n"
-            text += f"📊 Жами (ҳозирча): {total:,} сўм\n"
+            delivery_cost = context.user_data.get('delivery_cost')
+            if delivery_cost:
+                text += f"🚚 Етказиб бериш: {delivery_cost:,} сўм\n"
+                text += f"📊 Жами: {total + delivery_cost:,} сўм\n"
+            else:
+                text += "📍 Етказиб бериш: Локация киритилмаган\n"
+                text += f"📊 Жами (ҳозирча): {total:,} сўм\n"
 
     return text
 
@@ -503,7 +527,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     await update.message.reply_text(
         f"🎉 Ассалому алайкум, {user.first_name}!\n\n"
-        f"🍽 Dilkash kafesiga  хуш келибсиз!\n"
+        f"🍽 Dilkash kafesiga хуш келибсиз!\n"
         f"📱 Буюртма бериш учун телефон рақамингизни улашинг:",
         reply_markup=ReplyKeyboardMarkup(
             [[KeyboardButton("📱 Контактни улашиш", request_contact=True)]],
@@ -530,23 +554,59 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if context.user_data.get("awaiting_contact_at_start"):
         del context.user_data["awaiting_contact_at_start"]
+        # Service type tanlash
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🚚 Етказиб бериш", callback_data="service_type:delivery")],
+            [InlineKeyboardButton("🏪 Олиб кетиш", callback_data="service_type:pickup")]
+        ])
         await update.message.reply_text(
-            "🎉 Энди буюртма беришингиз мумкин:",
-            reply_markup=main_inline_menu(context)
+            "🚀 Қайси хизматдан фойдаланмоқчисиз?",
+            reply_markup=keyboard
         )
         return
 
     # Agar /checkout jarayoni bo'lsa
-    await update.message.reply_text(
-        "📞 Контакт қабул қилинди! Энди локациянгизни юборинг:",
-        reply_markup=ReplyKeyboardMarkup([
-            [KeyboardButton("📍 Локацияни улашиш", request_location=True)]
-        ], resize_keyboard=True)
-    )
-    context.user_data['awaiting_location'] = True
+    service_type = context.user_data.get('service_type', 'delivery')
+    if service_type == 'delivery':
+        await update.message.reply_text(
+            "📞 Контакт қабул қилинди! Энди локациянгизни юборинг:",
+            reply_markup=ReplyKeyboardMarkup([
+                [KeyboardButton("📍 Локацияни улашиш", request_location=True)]
+            ], resize_keyboard=True)
+        )
+        context.user_data['awaiting_location'] = True
+    else:
+        # Pickup uchun address/location kerak emas
+        await update.message.reply_text(
+            "📞 Контакт қабул қилинди!",
+            reply_markup=ReplyKeyboardRemove()
+        )
+        keyboard = [
+            [InlineKeyboardButton("✅ Тасдиқлаш", callback_data="final_confirm_order")],
+            [InlineKeyboardButton("❌ Бекор қилиш", callback_data="cancel_order")]
+        ]
+        context.user_data['payment_method'] = 'naqd'  # default
+        await update.message.reply_text(
+            "💳 Тўлов усули: Нақд\n🔸 Буюртмани тасдиқлаш учун \"✅ Тасдиқлаш\" босинг:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+async def handle_service_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    service_type = query.data.split(":")[1]
+    context.user_data['service_type'] = service_type
+    
+    if service_type == 'delivery':
+        text = "🚚 Етказиб бериш хизмати танланди!\n\n🍽 Энди буюртма беришингиз мумкин:"
+    else:
+        text = "🏪 Олиб кетиш хизмати танланди!\n\n🍽 Энди буюртма беришингиз мумкин:"
+    
+    await query.edit_message_text(text, reply_markup=main_inline_menu(context))
 
 # ----------------------------------------------------
-# Lokatsiya + masofa + yetkazib berish narxi
+# Lokatsiya + masofa + yetkazib berish narxi (faqat delivery uchun)
 # ----------------------------------------------------
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if 'awaiting_location' in context.user_data and context.user_data['awaiting_location']:
@@ -566,10 +626,13 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 f"😔 Узр, сизнинг манзилингиз бизнинг 10 км радиусимиздан ташқарида.\n"
                 "🚫 Шу сабаб етказиб бериш хизмати мавжуд эмас.\n"
-                "📋 Аммо менудан маҳсулотларни кўришингиз мумкин.",
-                reply_markup=ReplyKeyboardRemove()
+                "💡 Лекин сиз олиб кетиш хизматидан фойдаланишингиз мумкин!\n\n"
+                "🏪 Олиб кетиш хизматига ўтишни хоҳлайсизми?",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🏪 Олиб кетишга ўтиш", callback_data="service_type:pickup")],
+                    [InlineKeyboardButton("🍽 Фақат меню кўриш", callback_data="main_menu")]
+                ])
             )
-            await update.message.reply_text("🍽 Меню:", reply_markup=main_inline_menu(context))
         else:
             # Radius ichida
             context.user_data['delivery_possible'] = True
@@ -586,9 +649,9 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"📏 Масофа: таҳминан {distance_km:.1f} км\n"
                 f"💰 Етказиб бериш нархи: {delivery_cost:,} сўм\n\n"
                 f"🏠 Агар қўшимча манзил киритмоқчи бўлсангиз, ёзинг.\n"
-                f"❌ Керак бўлмаса, \"Қўшимча манзил керак эмас\" деб ёзинг.",
+                f"❌ Керак бўлмаса, \"Бекор қилиш\" деб ёзинг.",
                 reply_markup=ReplyKeyboardMarkup([
-                    [KeyboardButton("❌ Қўшимча манзил керак эмас")]
+                    [KeyboardButton("❌ Бекор қилиш")]
                 ], resize_keyboard=True)
             )
             context.user_data['awaiting_address'] = True
@@ -596,7 +659,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if 'awaiting_address' in context.user_data and context.user_data['awaiting_address']:
         address = update.message.text
-        if address.lower() == "❌ Қўшимча манзил керак эмас" or address.lower() == "Қўшимча манзил керак эмас":
+        if address.lower() == "❌ бекор қилиш" or address.lower() == "бекор қилиш":
             address = None
         context.user_data['address'] = address
         del context.user_data['awaiting_address']
@@ -666,6 +729,8 @@ async def show_user_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     'total': float(order.total_amount),
                     'status': order.status,
                     'status_display': order.get_status_display(),
+                    'service_type': order.service_type,
+                    'service_type_display': order.get_service_type_display(),
                 })
             logger.info(f"Foydalanuvchi {user.id} uchun {len(orders_data)} ta buyurtma topildi.")
         else:
@@ -704,6 +769,7 @@ async def show_user_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
         date = order['date']
         total = order['total']
         status = order['status_display']
+        service_type = order['service_type_display']
         
         status_emoji = {
             "Янги": "🆕",
@@ -711,12 +777,14 @@ async def show_user_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Тайёр": "🍽",
             "Йўлда": "🚚",
             "Етказилди": "✅",
+            "Олиб кетилди": "✅",
             "Бекор қилинган": "❌"
         }
         emoji = status_emoji.get(status, "📋")
         
         text += f"📋 Буюртма ID: **{order_id}**\n"
         text += f"📅 Вақт: {date}\n"
+        text += f"🚀 Хизмат: {service_type}\n"
         text += f"💰 Сумма: {total:,} сўм\n"
         text += f"{emoji} Статус: **{status}**\n\n"
 
@@ -802,7 +870,7 @@ async def show_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         product_buttons.append([InlineKeyboardButton("⬅️ Орқага", callback_data="menu")])
 
-    new_text = f"🍽 **{category_name}** категориясидаги маҳсулотлар:"
+    new_text = f"🍽 **{category_name}** категориясидаг�� маҳсулотлар:"
     await edit_message_based_on_type(query, new_text, product_buttons)
 
 async def show_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1061,7 +1129,7 @@ async def checkout(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Check minimum order value (50,000 som without delivery)
+    # Check minimum order value (15,000 som without delivery)
     total_products_price = Decimal('0')
     for product_name, qty in user_savat.items():
         narx = mahsulotlar.get(product_name, {}).get("narx", Decimal('0'))
@@ -1107,19 +1175,47 @@ async def checkout(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    await edit_message_based_on_type(
-        query,
-        "📍 Илтимос локациянгизни юборинг:",
-        [[InlineKeyboardButton("⬅️ Орқага", callback_data="main_menu")]]
-    )
-    await query.message.reply_text(
-        "📍 Локацияни юборинг:",
-        reply_markup=ReplyKeyboardMarkup(
-            [[KeyboardButton("📍 Локацияни улашиш", request_location=True)]],
-            resize_keyboard=True
+    # Service type tanlash agar tanlanmagan bo'lsa
+    if 'service_type' not in context.user_data:
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🚚 Етказиб бериш", callback_data="service_type:delivery")],
+            [InlineKeyboardButton("🏪 Олиб кетиш", callback_data="service_type:pickup")]
+        ])
+        await edit_message_based_on_type(
+            query,
+            "🚀 Қайси хизматдан фойдаланмоқчисиз?",
+            keyboard.inline_keyboard
         )
-    )
-    context.user_data['awaiting_location'] = True
+        return
+
+    service_type = context.user_data.get('service_type')
+    
+    if service_type == 'delivery':
+        await edit_message_based_on_type(
+            query,
+            "📍 Илтимос локациянгизни юборинг:",
+            [[InlineKeyboardButton("⬅️ Орқага", callback_data="main_menu")]]
+        )
+        await query.message.reply_text(
+            "📍 Локацияни юборинг:",
+            reply_markup=ReplyKeyboardMarkup(
+                [[KeyboardButton("📍 Локацияни улашиш", request_location=True)]],
+                resize_keyboard=True
+            )
+        )
+        context.user_data['awaiting_location'] = True
+    else:
+        # Pickup uchun location kerak emas, to'g'ridan-to'g'ri tasdiqlash
+        keyboard = [
+            [InlineKeyboardButton("✅ Тасдиқлаш", callback_data="final_confirm_order")],
+            [InlineKeyboardButton("❌ Бекор қилиш", callback_data="cancel_order")]
+        ]
+        context.user_data['payment_method'] = 'naqd'  # default
+        await edit_message_based_on_type(
+            query,
+            "🏪 Олиб кетиш хизмати танланди!\n💳 Тўлов усули: Нақд\n🔸 Буюртмани тасдиқлаш учун \"✅ Тасдиқлаш\" босинг:",
+            keyboard
+        )
 
 # ----------------------------------------------------
 # Buyurtmani tasdiqlash va Django ga yuborish (ORM orqali)
@@ -1127,7 +1223,7 @@ async def checkout(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @sync_to_async
 @transaction.atomic
-def _create_order_and_items_sync(telegram_user_id, full_name, phone, payment_method, location, address, products_total, delivery_cost, total_amount, order_items_data):
+def _create_order_and_items_sync(telegram_user_id, full_name, phone, payment_method, service_type, location, address, products_total, delivery_cost, total_amount, order_items_data):
     customer, created = Customer.objects.get_or_create(
         telegram_id=telegram_user_id,
         defaults={'full_name': full_name, 'phone_number': phone}
@@ -1142,8 +1238,9 @@ def _create_order_and_items_sync(telegram_user_id, full_name, phone, payment_met
         telegram_user_id=telegram_user_id,
         status='yangi',
         payment_method=payment_method,
-        latitude=location.get('latitude'),
-        longitude=location.get('longitude'),
+        service_type=service_type,
+        latitude=location.get('latitude') if location else None,
+        longitude=location.get('longitude') if location else None,
         address=address,
         products_total=products_total,
         delivery_cost=delivery_cost,
@@ -1192,8 +1289,10 @@ async def final_confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE
         context.user_data.pop('payment_method', None)
         return
 
-    # Agar masofa > maksimal radius bo'lsa, rad etamiz
-    if context.user_data.get('delivery_possible') is False:
+    service_type = context.user_data.get('service_type', 'delivery')
+    
+    # Agar delivery bo'lsa va masofa > maksimal radius bo'lsa, rad etamiz
+    if service_type == 'delivery' and context.user_data.get('delivery_possible') is False:
         await query.edit_message_text(
             f"😔 Узр, сизнинг ҳудудингизга етказиб бериш хизмати мавжуд эмас (максимал 10 км)."
             "🍽 Меню орқали танишиб кўришингиз мумкин."
@@ -1204,8 +1303,8 @@ async def final_confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE
     phone = context.user_data.get('phone_number', 'Номаълум')
     full_name = context.user_data.get('full_name', 'Номаълум')
     telegram_user_id = context.user_data.get('telegram_user_id', user.id)
-    location = context.user_data.get('location', {})
-    address = context.user_data.get('address', None)
+    location = context.user_data.get('location', {}) if service_type == 'delivery' else None
+    address = context.user_data.get('address', None) if service_type == 'delivery' else None
     payment_method = context.user_data.get('payment_method', 'naqd')
 
     user_savat = context.user_data.get('savat', {})
@@ -1216,7 +1315,7 @@ async def final_confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return
 
-    delivery_cost = context.user_data.get('delivery_cost', Decimal('0'))
+    delivery_cost = context.user_data.get('delivery_cost', Decimal('0')) if service_type == 'delivery' else Decimal('0')
     total_products_price = Decimal('0')
     order_items_data = []
 
@@ -1241,7 +1340,7 @@ async def final_confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     try:
         order = await _create_order_and_items_sync(
-            telegram_user_id, full_name, phone, payment_method, location, address,
+            telegram_user_id, full_name, phone, payment_method, service_type, location, address,
             total_products_price, delivery_cost, total_amount, order_items_data
         )
         
@@ -1250,10 +1349,16 @@ async def final_confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE
         chef_text += f"👨‍💼 Исм: {full_name}\n"
         chef_text += f"📱 Телефон: {phone}\n"
         chef_text += f"💳 Тўлов усули: {order.get_payment_method_display()}\n"
-        if order.address:
-            chef_text += f"🏠 Манзил: {order.address}\n"
+        chef_text += f"🚀 Хизмат тури: {order.get_service_type_display()}\n"
+        
+        if service_type == 'delivery':
+            if order.address:
+                chef_text += f"🏠 Манзил: {order.address}\n"
+            else:
+                chef_text += "📍 Манзил: Фақат локация\n"
         else:
-            chef_text += "📍 Манзил: Фақат локация\n"
+            chef_text += "🏪 Олиб кетиш учун: Ресторандан\n"
+            
         chef_text += f"\n🍽 **Маҳсулотлар:**\n"
         for item in order_items_data: # Iterate directly over the prepared list
             chef_text += f"• {item['quantity']} дона {item['product_name']} - {item['total']:,} сўм\n"
@@ -1274,7 +1379,8 @@ async def final_confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE
         if chef_msg_response and chef_msg_response.get('ok'):
             order.chef_message_id = chef_msg_response['result']['message_id']
         
-        if order.latitude and order.longitude:
+        # Lokatsiya yuborish faqat delivery uchun
+        if service_type == 'delivery' and order.latitude and order.longitude:
             send_telegram_location(
                 chat_id=settings.CHEF_CHAT_ID,
                 latitude=order.latitude,
@@ -1287,12 +1393,18 @@ async def final_confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE
         user_text += f"👨‍💼 Исм: {full_name}\n"
         user_text += f"📱 Телефон: {phone}\n"
         user_text += f"💳 Тўлов усули: {order.get_payment_method_display()}\n"
-        if order.address:
-            user_text += f"🏠 Манзил: {order.address}\n"
+        user_text += f"🚀 Хизмат тури: {order.get_service_type_display()}\n"
+        
+        if service_type == 'delivery':
+            if order.address:
+                user_text += f"🏠 Манзил: {order.address}\n"
+            else:
+                user_text += "📍 Манзил: Фақат локация\n"
+            if order.latitude and order.longitude:
+                user_text += f"📍 Локация: https://www.google.com/maps?q={order.latitude},{order.longitude}\n"
         else:
-            user_text += "📍 Манзил: Фақат локация\n"
-        if order.latitude and order.longitude:
-            user_text += f"📍 Локация: https://www.google.com/maps?q={order.latitude},{order.longitude}\n"
+            user_text += "🏪 Олиб кетиш учун: Ресторандан\n"
+            
         user_text += f"\n🍽 **Маҳсулотлар:**\n"
         for item in order_items_data: # Iterate directly over the prepared list
             user_text += f"• {item['quantity']} дона {item['product_name']} - {item['total']:,} сўм\n"
@@ -1350,6 +1462,8 @@ def _update_order_status_sync(order_id, new_status, old_status):
         order.ready_at = timezone.now()
     elif new_status == 'yetkazildi':
         order.delivered_at = timezone.now()
+    elif new_status == 'olib_ketildi':
+        order.picked_up_at = timezone.now()
     
     order.save()
     
@@ -1372,11 +1486,13 @@ async def handle_chef_courier_status_update(update: Update, context: ContextType
         # Fetch order to get old_status before passing to sync function
         order_obj_for_status_check = await sync_to_async(Order.objects.get)(id=int(order_id))
         old_status = order_obj_for_status_check.status
+        service_type = order_obj_for_status_check.service_type
 
         status_map = {
             "chef_confirm": "tasdiqlangan",
             "chef_ready": "tayor",
             "chef_cancel": "bekor_qilingan",
+            "chef_picked_up": "olib_ketildi",
             "courier_on_way": "yolda",
             "courier_delivered": "yetkazildi",
             "courier_cancel": "bekor_qilingan",
@@ -1387,12 +1503,20 @@ async def handle_chef_courier_status_update(update: Update, context: ContextType
             await query.edit_message_text("❌ Номаълум ҳолат ўзгариши.")
             return
 
-        valid_transitions = {
-            'yangi': ['tasdiqlangan', 'bekor_qilingan'],
-            'tasdiqlangan': ['tayor', 'bekor_qilingan'],
-            'tayor': ['yolda', 'bekor_qilingan'],
-            'yolda': ['yetkazildi', 'bekor_qilingan'],
-        }
+        # Valid transitions for different service types
+        if service_type == 'pickup':
+            valid_transitions = {
+                'yangi': ['tasdiqlangan', 'bekor_qilingan'],
+                'tasdiqlangan': ['tayor', 'bekor_qilingan'],
+                'tayor': ['olib_ketildi', 'bekor_qilingan'],
+            }
+        else:  # delivery
+            valid_transitions = {
+                'yangi': ['tasdiqlangan', 'bekor_qilingan'],
+                'tasdiqlangan': ['tayor', 'bekor_qilingan'],
+                'tayor': ['yolda', 'bekor_qilingan'],
+                'yolda': ['yetkazildi', 'bekor_qilingan'],
+            }
 
         if new_status not in valid_transitions.get(old_status, []):
             await query.edit_message_text(f"Ҳолат {old_status} дан {new_status} га ўзгартиришга рухсат берилмаган.")
@@ -1487,10 +1611,14 @@ def main():
     application.add_handler(MessageHandler(filters.LOCATION, handle_location))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
+    # Service type selection
+    application.add_handler(CallbackQueryHandler(handle_service_type, pattern="^service_type:"))
+
     # Oshpaz va Kuryer callbacklari (Django ORM orqali)
     application.add_handler(CallbackQueryHandler(handle_chef_courier_status_update, pattern="^chef_confirm:"))
     application.add_handler(CallbackQueryHandler(handle_chef_courier_status_update, pattern="^chef_ready:"))
     application.add_handler(CallbackQueryHandler(handle_chef_courier_status_update, pattern="^chef_cancel:"))
+    application.add_handler(CallbackQueryHandler(handle_chef_courier_status_update, pattern="^chef_picked_up:"))
     application.add_handler(CallbackQueryHandler(handle_chef_courier_status_update, pattern="^courier_on_way:"))
     application.add_handler(CallbackQueryHandler(handle_chef_courier_status_update, pattern="^courier_delivered:"))
     application.add_handler(CallbackQueryHandler(handle_chef_courier_status_update, pattern="^courier_cancel:"))
