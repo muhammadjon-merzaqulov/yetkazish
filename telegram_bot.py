@@ -659,7 +659,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if 'awaiting_address' in context.user_data and context.user_data['awaiting_address']:
         address = update.message.text
-        if address.lower() == "❌ Қўшимча манзил керак эмас" or address.lower() == "Қўшимча манзил керак эмас":
+        if address.lower() == "❌ қўшимча манзил керак эмас" or address.lower() == "қўшимча манзил керак эмас":
             address = None
         context.user_data['address'] = address
         del context.user_data['awaiting_address']
@@ -870,7 +870,7 @@ async def show_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         product_buttons.append([InlineKeyboardButton("⬅️ Орқага", callback_data="menu")])
 
-    new_text = f"🍽 **{category_name}** категориясидаг�� маҳсулотлар:"
+    new_text = f"🍽 **{category_name}** категориясидаги маҳсулотлар:"
     await edit_message_based_on_type(query, new_text, product_buttons)
 
 async def show_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1453,6 +1453,7 @@ async def cancel_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @sync_to_async
 @transaction.atomic
 def _update_order_status_sync(order_id, new_status, old_status):
+    logger.info(f"Attempting to update order {order_id} status from {old_status} to {new_status}")
     order = Order.objects.get(id=order_id)
     order.status = new_status
     
@@ -1466,6 +1467,7 @@ def _update_order_status_sync(order_id, new_status, old_status):
         order.picked_up_at = timezone.now()
     
     order.save()
+    logger.info(f"Order {order_id} status successfully updated to {order.status} in DB.")
     
     OrderStatusHistory.objects.create(
         order=order,
@@ -1474,6 +1476,7 @@ def _update_order_status_sync(order_id, new_status, old_status):
         changed_by=None, # Bot orqali o'zgargani uchun user None
         notes=f'Telegram bot orqali yangilandi'
     )
+    logger.info(f"Order status history created for order {order_id}: {old_status} -> {new_status}")
     return order
 
 async def handle_chef_courier_status_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1482,11 +1485,13 @@ async def handle_chef_courier_status_update(update: Update, context: ContextType
     
     try:
         action, order_id = query.data.split(":")
+        logger.info(f"Callback received: action={action}, order_id={order_id}")
         
         # Fetch order to get old_status before passing to sync function
         order_obj_for_status_check = await sync_to_async(Order.objects.get)(id=int(order_id))
         old_status = order_obj_for_status_check.status
         service_type = order_obj_for_status_check.service_type
+        logger.info(f"Order {order_id} current status: {old_status}, service_type: {service_type}")
 
         status_map = {
             "chef_confirm": "tasdiqlangan",
@@ -1498,9 +1503,11 @@ async def handle_chef_courier_status_update(update: Update, context: ContextType
             "courier_cancel": "bekor_qilingan",
         }
         new_status = status_map.get(action)
+        logger.info(f"Mapped new status: {new_status}")
 
         if not new_status:
             await query.edit_message_text("❌ Номаълум ҳолат ўзгариши.")
+            logger.warning(f"Unknown status change action: {action}")
             return
 
         # Valid transitions for different service types
@@ -1520,17 +1527,20 @@ async def handle_chef_courier_status_update(update: Update, context: ContextType
 
         if new_status not in valid_transitions.get(old_status, []):
             await query.edit_message_text(f"Ҳолат {old_status} дан {new_status} га ўзгартиришга рухсат берилмаган.")
+            logger.warning(f"Invalid transition for order {order_id}: {old_status} -> {new_status} (service_type: {service_type})")
             return
 
-        # Call the new sync helper function
         updated_order = await _update_order_status_sync(int(order_id), new_status, old_status)
+        logger.info(f"Order {order_id} status updated to {updated_order.status}. Now updating Telegram messages.")
             
         await _update_telegram_messages(updated_order, old_status, new_status) # Pass the updated order object
+        logger.info(f"Telegram messages updated for order {order_id}.")
             
     except Order.DoesNotExist:
+        logger.error(f"Order with ID {order_id} not found.", exc_info=True)
         await query.edit_message_text("❌ Буюртма топилмади.")
     except Exception as e:
-        logger.error(f"Status update error: {e}", exc_info=True)
+        logger.error(f"Status update error for order {order_id}: {e}", exc_info=True)
         await query.edit_message_text(f"❌ Хато: {str(e)}")
 
 # ----------------------------------------------------
@@ -1587,7 +1597,7 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
         try:
             await context.bot.send_message(
                 chat_id=update.effective_user.id,
-                text="❌ Хатолик юз берди. Илтимос, кейинроқ қайта уриниб кўринг."
+                text="❌ Хатолик юз берди. Илтимос, кейинроq қайта уриниб кўринг."
             )
         except Exception as e:
             logger.error(f"Failed to send error message to user: {e}")
