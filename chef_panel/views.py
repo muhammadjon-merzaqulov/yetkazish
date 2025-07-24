@@ -865,3 +865,25 @@ def get_order_details_api(request, order_id):
             logger.error(f"Buyurtma tafsilotlarini olishda xato: {e}", exc_info=True)
             return JsonResponse({'success': False, 'message': str(e)}, status=400)
     return JsonResponse({'success': False, 'message': 'Faqat GET so\'rov qabul qilinadi'}, status=405)
+
+@csrf_exempt
+def toggle_product_availability(request, product_id):
+    """API: Mahsulot mavjudligini almashtirish"""
+    if request.method == 'POST':
+        try:
+            product = get_object_or_404(Product, id=product_id)
+            product.is_available = not product.is_available
+            product.save()
+            
+            return JsonResponse({
+                'success': True,
+                'is_available': product.is_available,
+                'message': f'Mahsulot "{product.name}" holati muvaffaqiyatli yangilandi.'
+            })
+        except Product.DoesNotExist:
+            logger.error(f"Mahsulot topilmadi: ID {product_id}")
+            return JsonResponse({'success': False, 'message': 'Mahsulot topilmadi.'}, status=404)
+        except Exception as e:
+            logger.error(f"Mahsulot mavjudligini yangilashda xato: {e}", exc_info=True)
+            return JsonResponse({'success': False, 'message': str(e)}, status=500)
+    return JsonResponse({'success': False, 'message': 'Faqat POST so\'rov qabul qilinadi'}, status=405)
