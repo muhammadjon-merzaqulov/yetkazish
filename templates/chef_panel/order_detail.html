@@ -3,7 +3,7 @@
 {% block page_title %}Buyurtma #{{ order.order_number }} tafsilotlari{% endblock %}
 
 {% block content %}
-<div class="row g-2"> {# Reduced #}
+<div class="row g-2">
     <div class="col-lg-8">
         <!-- Order Details -->
         <div class="card">
@@ -12,6 +12,15 @@
                     <h5 class="mb-0">
                         <i class="fas fa-receipt me-2"></i>
                         Buyurtma #{{ order.order_number }}
+                        {% if order.service_type == 'delivery' %}
+                            <span class="service-badge service-delivery">
+                                <i class="fas fa-truck me-1"></i>Yetkazib berish
+                            </span>
+                        {% else %}
+                            <span class="service-badge service-pickup">
+                                <i class="fas fa-store me-1"></i>Olib ketish
+                            </span>
+                        {% endif %}
                     </h5>
                     <div>
                         {% if order.status == 'yangi' %}
@@ -34,6 +43,10 @@
                             <span class="status-badge bg-secondary">
                                 <i class="fas fa-check-double me-1"></i>Yetkazildi
                             </span>
+                        {% elif order.status == 'olib_ketildi' %}
+                            <span class="status-badge bg-secondary">
+                                <i class="fas fa-hand-holding me-1"></i>Olib ketildi
+                            </span>
                         {% elif order.status == 'bekor_qilingan' %}
                             <span class="status-badge bg-danger">
                                 <i class="fas fa-times me-1"></i>Bekor qilingan
@@ -44,7 +57,7 @@
             </div>
             <div class="card-body">
                 <!-- Customer Info -->
-                <div class="customer-section mb-2"> {# Reduced #}
+                <div class="customer-section mb-2">
                     <h6 class="section-title">
                         <i class="fas fa-user me-2"></i>Mijoz ma'lumotlari
                     </h6>
@@ -62,21 +75,57 @@
                             <span class="info-value">{{ order.get_payment_method_display }}</span>
                         </div>
                         <div class="info-item">
-                            <span class="info-label">Manzil:</span>
-                            <span class="info-value">
-                                {% if order.address %}{{ order.address }}{% else %}Lokatsiya orqali{% endif %}
-                                {% if order.latitude and order.longitude %}
-                                    <a href="https://www.google.com/maps?q={{ order.latitude }},{{ order.longitude }}" target="_blank" class="btn btn-sm btn-secondary ms-1">
-                                        <i class="fas fa-map-marker-alt me-1"></i>Xaritada ko'rish
-                                    </a>
-                                {% endif %}
-                            </span>
+                            <span class="info-label">Xizmat turi:</span>
+                            <span class="info-value">{{ order.get_service_type_display }}</span>
                         </div>
                     </div>
                 </div>
 
+                <!-- Address/Pickup Info -->
+                {% if order.service_type == 'delivery' %}
+                <div class="address-section mb-2">
+                    <h6 class="section-title">
+                        <i class="fas fa-map-marker-alt me-2"></i>Yetkazib berish manzili
+                    </h6>
+                    <div class="info-grid">
+                        {% if order.address %}
+                        <div class="info-item">
+                            <span class="info-label">Manzil:</span>
+                            <span class="info-value">{{ order.address }}</span>
+                        </div>
+                        {% endif %}
+                        {% if order.latitude and order.longitude %}
+                        <div class="info-item">
+                            <span class="info-label">Lokatsiya:</span>
+                            <span class="info-value">
+                                <a href="https://www.google.com/maps?q={{ order.latitude }},{{ order.longitude }}" target="_blank" class="btn btn-sm btn-secondary">
+                                    <i class="fas fa-map-marker-alt me-1"></i>Xaritada ko'rish
+                                </a>
+                            </span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% else %}
+                <div class="pickup-section mb-2">
+                    <h6 class="section-title">
+                        <i class="fas fa-store me-2"></i>Olib ketish ma'lumotlari
+                    </h6>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">Olib ketish joyi:</span>
+                            <span class="info-value">Restoran</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Yetkazib berish:</span>
+                            <span class="info-value">Yo'q</span>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
                 <!-- Order Timeline -->
-                <div class="timeline-section mb-2"> {# Reduced #}
+                <div class="timeline-section mb-2">
                     <h6 class="section-title">
                         <i class="fas fa-clock me-2"></i>Vaqt ma'lumotlari
                     </h6>
@@ -101,6 +150,12 @@
                         <div class="info-item">
                             <span class="info-label">Yetkazilgan:</span>
                             <span class="info-value">{{ order.delivered_at|date:"d.m.Y H:i" }}</span>
+                        </div>
+                        {% endif %}
+                        {% if order.picked_up_at %}
+                        <div class="info-item">
+                            <span class="info-label">Olib ketilgan:</span>
+                            <span class="info-value">{{ order.picked_up_at|date:"d.m.Y H:i" }}</span>
                         </div>
                         {% endif %}
                     </div>
@@ -129,10 +184,12 @@
                             <span class="summary-label">Mahsulotlar summasi:</span>
                             <span class="summary-value">{{ order.products_total|floatformat:0 }} so'm</span>
                         </div>
+                        {% if order.service_type == 'delivery' %}
                         <div class="summary-row">
                             <span class="summary-label">Yetkazib berish:</span>
                             <span class="summary-value">{{ order.delivery_cost|floatformat:0 }} so'm</span>
                         </div>
+                        {% endif %}
                         <div class="summary-row total-row">
                             <span class="summary-label">Umumiy summa:</span>
                             <span class="summary-value">{{ order.total_amount|floatformat:0 }} so'm</span>
@@ -153,15 +210,21 @@
                             <i class="fas fa-utensils me-2"></i>Tayor
                         </button>
                     {% elif order.status == 'tayor' %}
-                        <button class="btn btn-info on-way-order" data-order-id="{{ order.id }}">
-                            <i class="fas fa-truck me-2"></i>Yo'lda
-                        </button>
+                        {% if order.service_type == 'pickup' %}
+                            <button class="btn btn-success picked-up-order" data-order-id="{{ order.id }}">
+                                <i class="fas fa-hand-holding me-2"></i>Olib ketildi
+                            </button>
+                        {% else %}
+                            <button class="btn btn-info on-way-order" data-order-id="{{ order.id }}">
+                                <i class="fas fa-truck me-2"></i>Yo'lda
+                            </button>
+                        {% endif %}
                     {% elif order.status == 'yolda' %}
                         <button class="btn btn-secondary delivered-order" data-order-id="{{ order.id }}">
                             <i class="fas fa-check-double me-2"></i>Yetkazildi
                         </button>
                     {% endif %}
-                    {% if order.status != 'yetkazildi' and order.status != 'bekor_qilingan' %}
+                    {% if order.status not in 'yetkazildi,olib_ketildi,bekor_qilingan' %}
                         <button class="btn btn-danger cancel-order" data-order-id="{{ order.id }}">
                             <i class="fas fa-times me-2"></i>Bekor qilish
                         </button>
@@ -200,8 +263,8 @@
                         {% endfor %}
                     </div>
                 {% else %}
-                    <div class="text-center py-2"> {# Reduced #}
-                        <i class="fas fa-history fa-3x text-muted mb-2"></i> {# Reduced #}
+                    <div class="text-center py-2">
+                        <i class="fas fa-history fa-3x text-muted mb-2"></i>
                         <p class="text-muted">Holat tarixi mavjud emas</p>
                     </div>
                 {% endif %}
@@ -211,12 +274,32 @@
 </div>
 
 <style>
+.service-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.3rem 0.6rem;
+    border-radius: var(--radius-full);
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-left: 0.5rem;
+}
+
+.service-delivery {
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    color: white;
+}
+
+.service-pickup {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+}
+
 .section-title {
     font-size: 1rem;
     font-weight: 600;
     color: var(--text-primary);
-    margin-bottom: 0.6rem; /* Reduced */
-    padding-bottom: 0.3rem; /* Reduced */
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.3rem;
     border-bottom: 2px solid var(--border-light);
     display: flex;
     align-items: center;
@@ -225,18 +308,18 @@
 .info-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 0.6rem; /* Reduced */
+    gap: 0.6rem;
 }
 
 .info-item {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem; /* Reduced */
-    padding: 0.6rem; /* Reduced */
+    gap: 0.2rem;
+    padding: 0.6rem;
     background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
     border-radius: var(--radius-lg);
     border: 1px solid var(--border-light);
-    transition: none; /* Removed transition */
+    transition: none;
 }
 
 .info-label {
@@ -255,28 +338,36 @@
     font-weight: 500;
 }
 
+.address-section,
+.pickup-section {
+    background: linear-gradient(135deg, #e0f2fe 0%, #b3e5fc 100%);
+    padding: 1rem;
+    border-radius: var(--radius-lg);
+    border: 1px solid #81d4fa;
+}
+
 .products-list {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem; /* Reduced */
-    margin-bottom: 0.8rem; /* Reduced */
+    gap: 0.4rem;
+    margin-bottom: 0.8rem;
 }
 
 .product-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.6rem; /* Reduced */
+    padding: 0.6rem;
     background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
     border-radius: var(--radius-lg);
     border: 1px solid var(--border-light);
-    transition: none; /* Removed transition */
+    transition: none;
 }
 
 .product-info {
     display: flex;
     align-items: center;
-    gap: 0.6rem; /* Reduced */
+    gap: 0.6rem;
     flex: 1;
 }
 
@@ -289,7 +380,7 @@
     font-weight: 600;
     color: var(--primary-color);
     background: var(--bg-primary);
-    padding: 0.2rem 0.6rem; /* Reduced */
+    padding: 0.2rem 0.6rem;
     border-radius: var(--radius-sm);
     font-size: 0.875rem;
 }
@@ -302,7 +393,7 @@
 .order-summary {
     background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
     border-radius: var(--radius-lg);
-    padding: 0.6rem; /* Reduced */
+    padding: 0.6rem;
     border: 1px solid var(--border-light);
 }
 
@@ -310,7 +401,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.3rem 0; /* Reduced */
+    padding: 0.3rem 0;
 }
 
 .summary-row:not(:last-child) {
@@ -322,8 +413,8 @@
     font-size: 1.1rem;
     color: var(--text-primary);
     background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
-    margin: 0.3rem -0.6rem -0.6rem; /* Reduced */
-    padding: 0.6rem; /* Reduced */
+    margin: 0.3rem -0.6rem -0.6rem;
+    padding: 0.6rem;
     border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 
@@ -339,27 +430,27 @@
 .status-history {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem; /* Reduced */
+    gap: 0.6rem;
 }
 
 .history-item {
-    padding: 0.6rem; /* Reduced */
+    padding: 0.6rem;
     background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
     border-radius: var(--radius-lg);
     border-left: 4px solid var(--primary-color);
-    transition: none; /* Removed transition */
+    transition: none;
 }
 
 .history-status {
     font-weight: 600;
     color: var(--text-primary);
-    margin-bottom: 0.2rem; /* Reduced */
+    margin-bottom: 0.2rem;
 }
 
 .history-time {
     font-size: 0.875rem;
     color: var(--text-secondary);
-    margin-bottom: 0.2rem; /* Reduced */
+    margin-bottom: 0.2rem;
 }
 
 .history-user {
@@ -371,8 +462,8 @@
 .history-notes {
     font-size: 0.875rem;
     color: var(--info-color);
-    margin-top: 0.3rem; /* Reduced */
-    padding: 0.3rem; /* Reduced */
+    margin-top: 0.3rem;
+    padding: 0.3rem;
     background: var(--bg-primary);
     border-radius: var(--radius-sm);
 }
@@ -389,7 +480,7 @@
     .product-info {
         flex-direction: column;
         align-items: flex-start;
-        gap: 0.4rem; /* Reduced */
+        gap: 0.4rem;
     }
 }
 </style>
@@ -402,7 +493,7 @@ $(document).ready(function() {
     function getCookie(name) {
         let cookieValue = null;
         if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.cookie.split(';');
+            const cookies = document.cookie.split(';');
             for (let i = 0; i < cookies.length; i++) {
                 const cookie = cookies[i].trim();
                 if (cookie.substring(0, name.length + 1) === (name + '=')) {
@@ -428,7 +519,7 @@ $(document).ready(function() {
             return;
         }
         
-        $.post('{% url "chef_panel:update_order_status_api" %}', JSON.stringify({
+        $.post('{% url "chef_panel:update_order_status" %}', JSON.stringify({
             order_id: orderId,
             status: newStatus
         }), "json")
@@ -451,6 +542,11 @@ $(document).ready(function() {
     $('.ready-order').click(function() {
         var orderId = $(this).data('order-id');
         updateOrderStatus(orderId, 'tayor', 'Buyurtma tayor deb belgilaysizmi?');
+    });
+
+    $('.picked-up-order').click(function() {
+        var orderId = $(this).data('order-id');
+        updateOrderStatus(orderId, 'olib_ketildi', 'Buyurtma olib ketildi deb belgilaysizmi?');
     });
 
     $('.on-way-order').click(function() {
