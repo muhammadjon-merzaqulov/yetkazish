@@ -96,12 +96,13 @@ def load_data():
 
     
     for product in Product.objects.filter(is_available=True):
-        full_image_url = f"{settings.SITE_URL}{product.image.url}" if product.image else None
+        # O'zgartirish: Rasmni lokal fayl yo'li sifatida saqlash
+        local_image_path = product.image.path if product.image else None
 
         mahsulotlar[product.name] = {
             "narx": product.price,  # Keep as Decimal
             "desc": product.description,
-            "rasm":  full_image_url
+            "rasm":  local_image_path # Lokal fayl yo'lini saqlash
         }
     
     for category in Category.objects.filter(is_active=True):
@@ -436,7 +437,7 @@ async def remove_image_from_message(query, text, keyboard):
     try:
         await query.edit_message_media(
             media=InputMediaPhoto(
-                media="", # Placeholder image
+                media="", # Placeholder image - this might not work as expected, typically needs a file_id or URL
                 caption=text,
                 parse_mode='Markdown'
             ),
@@ -461,9 +462,15 @@ async def edit_message_based_on_type(query, text, keyboard, force_text=False):
             await query.answer("Хатолик юз берди. Илтимос, қайта уриниб кўринг.", show_alert=True)
     elif message.photo:
         try:
-            await remove_image_from_message(query, text, keyboard)
+            # If the message already has a photo, try to edit its caption and keyboard
+            # Note: This does not remove the photo, only changes text/keyboard
+            await query.edit_message_caption(
+                caption=text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="Markdown"
+            )
         except Exception as e:
-            logger.error(f"Failed to remove image: {e}")
+            logger.error(f"Failed to edit message caption: {e}")
             await query.answer("Хатолик юз берди. Илтимос, қайта уриниб кўринг.", show_alert=True)
     elif message.text:
         try:
@@ -627,7 +634,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data['delivery_possible'] = False
 
             await update.message.reply_text(
-                f"😔 Узр, сизнинг манзилингиз бизнинг 10 км радиусимиздан ташқарида.\n"
+                f"😔 Узр, сизнинг манзилингиз бизнинг {bot_settings.delivery_max_radius_km} км радиусимиздан ташқарида.\n"
                 "🚫 Шу сабаб етказиб бериш хизмати мавжуд эмас.\n"
                 "💡 Лекин сиз олиб кетиш хизматидан фойдаланишингиз мумкин!\n\n"
                 "🏪 Олиб кетиш хизматига ўтишни хоҳлайсизми?",
@@ -907,7 +914,7 @@ async def show_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     narx = product_data.get("narx", Decimal('0'))
     desc = product_data.get("desc", "")
-    image = product_data.get("rasm", None)
+    image_path = product_data.get("rasm", None) # Lokal fayl yo'li
 
     product_category = None
     for cat, prods in kategoriyalar.items():
@@ -932,6 +939,7 @@ async def show_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🛒 Саватга қўшиш", callback_data=f"add_to_cart:{product_name}")]
     ]
 
+    # product_category ni topish
     product_category = None
     for cat, prods in kategoriyalar.items():
         if product_name in prods:
@@ -940,16 +948,33 @@ async def show_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if product_category:
         keyboard.append([InlineKeyboardButton("⬅️ Орқага", callback_data=f"category:{product_category}")])
 
-    if image:
+    if image_path: # Agar rasm yo'li mavjud bo'lsa
         try:
-            await query.edit_message_media(
-                media=InputMediaPhoto(media=image, caption=text, parse_mode='Markdown'),
+            with open(image_path, 'rb') as f: # Rasmni lokal tarzda ochish
+                await query.edit_message_media(
+                    media=InputMediaPhoto(media=f, caption=text, parse_mode='Markdown'), # Fayl obyektini yuborish
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+        except FileNotFoundError:
+            logger.error(f"Image file not found at {image_path}")
+            await query.answer("Расм топилмади.", show_alert=True)
+            # Agar rasm topilmasa, faqat matnni yuborish
+            await query.edit_message_text(
+                text,
+                parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
         except Exception as e:
-            logger.error(f"Failed to edit message media: {e}")
-            await edit_message_based_on_type(query, text, keyboard)
+            logger.error(f"Failed to edit message media with local file {image_path}: {e}")
+            await query.answer("Расм юборишда хатолик юз берди. Илтимос, қайта уриниб кўринг.", show_alert=True)
+            # Boshqa xatoliklarda ham faqat matnni yuborish
+            await query.edit_message_text(
+                text,
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
     else:
+        # Agar rasm yo'li mavjud bo'lmasa, faqat matnni yuborish
         await query.edit_message_text(
             text,
             parse_mode="Markdown",
@@ -1014,7 +1039,7 @@ async def handle_quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     product_data = mahsulotlar.get(product_name, {})
     narx = product_data.get("narx", Decimal('0'))
     desc = product_data.get("desc", "")
-    image = product_data.get("rasm", None)
+    image_path = product_data.get("rasm", None) # Lokal fayl yo'li
 
     text = f"🍽 **{product_name}**\n"
     text += f"💰 Нархи: {narx:,} сўм\n"
@@ -1039,15 +1064,29 @@ async def handle_quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if product_category:
         keyboard.append([InlineKeyboardButton("⬅️ Орқага", callback_data=f"category:{product_category}")])
 
-    if image:
+    if image_path: # Agar rasm yo'li mavjud bo'lsa
         try:
-            await query.edit_message_media(
-                media=InputMediaPhoto(media=image, caption=text, parse_mode='Markdown'),
+            with open(image_path, 'rb') as f: # Rasmni lokal tarzda ochish
+                await query.edit_message_media(
+                    media=InputMediaPhoto(media=f, caption=text, parse_mode='Markdown'), # Fayl obyektini yuborish
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+        except FileNotFoundError:
+            logger.error(f"Image file not found at {image_path}")
+            await query.answer("Расм топилмади.", show_alert=True)
+            # Agar rasm topilmasa, faqat matnni yuborish
+            await query.edit_message_text(
+                text=text, parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
         except Exception as e:
-            logger.error(f"Failed to update quantity selection: {e}")
-            await edit_message_based_on_type(query, text, keyboard)
+            logger.error(f"Failed to update quantity selection with local file {image_path}: {e}")
+            await query.answer("Расм юборишда хатолик юз берди. Илтимос, қайта уриниб кўринг.", show_alert=True)
+            # Boshqa xatoliklarda ham faqat matnni yuborish
+            await query.edit_message_text(
+                text=text, parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
     else:
         await query.edit_message_text(
             text=text, parse_mode="Markdown",
@@ -1181,6 +1220,11 @@ async def checkout(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Бизнинг иш вақтимиз: {current_bot_settings.service_start_time.strftime('%H:%M')} дан {current_bot_settings.service_end_time.strftime('%H:%M')} гача.",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Бош меню", callback_data="main_menu")]])
         )
+        # Clear user data as order cannot be placed
+        context.user_data.pop('savat', None)
+        context.user_data.pop('address', None)
+        context.user_data.pop('location', None)
+        context.user_data.pop('payment_method', None)
         return
 
     if 'phone_number' not in context.user_data:
@@ -1317,7 +1361,7 @@ async def final_confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Agar delivery bo'lsa va masofa > maksimal radius bo'lsa, rad etamiz
     if service_type == 'delivery' and context.user_data.get('delivery_possible') is False:
         await query.edit_message_text(
-            f"😔 Узр, сизнинг ҳудудингизга етказиб бериш хизмати мавжуд эмас (максимал 10 км)."
+            f"😔 Узр, сизнинг ҳудудингизга етказиб бериш хизмати мавжуд эмас (максимал {bot_settings.delivery_max_radius_km} км)."
             "🍽 Меню орқали танишиб кўришингиз мумкин."
         )
         return
