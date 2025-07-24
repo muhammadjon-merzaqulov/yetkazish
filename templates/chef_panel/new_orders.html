@@ -400,6 +400,9 @@
 </div>
 </div>
 
+<!-- Ovoz fayli -->
+<audio id="new-order-sound" src="{% static 'sounds/new_order.mp3' %}" preload="auto" style="display: none;"></audio>
+
 <style>
 /* Formatted text styles */
 .formatted-phone {
@@ -1177,6 +1180,10 @@ $('#enterFullscreen').click(function() {
     setTimeout(applyFormatting, 100);
 });
 
+// Ovoz fayli elementi
+const newOrderSound = document.getElementById('new-order-sound');
+let currentOrderCount = parseInt($('#orders-count').text());
+
 // Auto refresh function every 3 seconds
 function refreshNewOrders() {
     console.log('Refreshing orders...');
@@ -1190,8 +1197,16 @@ function refreshNewOrders() {
         success: function(data) {
             var tempDiv = $('<div>').html(data);
             var updatedContent = tempDiv.find('#new-orders-container').html();
-            var updatedCount = tempDiv.find('#orders-count').text();
+            var updatedCount = parseInt(tempDiv.find('#orders-count').text());
             
+            // Yangi buyurtmalar kelganini tekshirish va ovoz chiqarish
+            if (updatedCount > currentOrderCount) {
+                if (newOrderSound) {
+                    newOrderSound.play().catch(e => console.error("Ovozni ijro etishda xato:", e));
+                }
+            }
+            currentOrderCount = updatedCount; // Buyurtmalar sonini yangilash
+
             // Update orders count
             $('#orders-count').text(updatedCount);
             
