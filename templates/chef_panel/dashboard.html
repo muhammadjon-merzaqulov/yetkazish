@@ -4,7 +4,7 @@
 
 {% block content %}
 <!-- Statistics Cards -->
-<div class="row g-2 mb-2"> {# Reduced #}
+<div class="row g-2 mb-2">
     <div class="col-xl-3 col-md-6">
         <div class="card stats-card">
             <div class="card-body">
@@ -67,8 +67,42 @@
     </div>
 </div>
 
+<!-- Service Type Statistics -->
+<div class="row g-2 mb-2">
+    <div class="col-md-6">
+        <div class="card stats-card-pickup">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="stats-icon bg-pickup">
+                        <i class="fas fa-store"></i>
+                    </div>
+                    <div class="stats-content">
+                        <div class="stats-number">{{ stats.pickup_buyurtmalar }}</div>
+                        <div class="stats-label">Olib ketish (faol)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card stats-card-delivery">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="stats-icon bg-delivery">
+                        <i class="fas fa-truck"></i>
+                    </div>
+                    <div class="stats-content">
+                        <div class="stats-number">{{ stats.delivery_buyurtmalar }}</div>
+                        <div class="stats-label">Yetkazib berish (faol)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Sales Summary -->
-<div class="row g-2 mb-2"> {# Reduced #}
+<div class="row g-2 mb-2">
     <div class="col-md-6">
         <div class="card">
             <div class="card-header">
@@ -106,13 +140,28 @@
                         </div>
                     </div>
                 </div>
+                <hr>
+                <div class="row text-center">
+                    <div class="col-6">
+                        <div class="service-stat">
+                            <div class="service-number pickup">{{ weekly_stats.pickup_orders }}</div>
+                            <div class="service-label">Olib ketish</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="service-stat">
+                            <div class="service-number delivery">{{ weekly_stats.delivery_orders }}</div>
+                            <div class="service-label">Yetkazib berish</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 <!-- Recent Orders and Top Customers -->
-<div class="row g-2"> {# Reduced #}
+<div class="row g-2">
     <div class="col-lg-8">
         <div class="card">
             <div class="card-header">
@@ -129,6 +178,7 @@
                                 <tr>
                                     <th>Buyurtma #</th>
                                     <th>Mijoz</th>
+                                    <th>Xizmat</th>
                                     <th>Summa</th>
                                     <th>Holat</th>
                                     <th>Vaqt</th>
@@ -141,6 +191,17 @@
                                         <strong>{{ order.order_number }}</strong>
                                     </td>
                                     <td>{{ order.customer.full_name }}</td>
+                                    <td>
+                                        {% if order.service_type == 'delivery' %}
+                                            <span class="service-badge-sm service-delivery">
+                                                <i class="fas fa-truck me-1"></i>Yetkazish
+                                            </span>
+                                        {% else %}
+                                            <span class="service-badge-sm service-pickup">
+                                                <i class="fas fa-store me-1"></i>Olib ketish
+                                            </span>
+                                        {% endif %}
+                                    </td>
                                     <td>{{ order.total_amount|floatformat:0 }} so'm</td>
                                     <td>
                                         {% if order.status == 'yangi' %}
@@ -151,6 +212,14 @@
                                             <span class="status-badge bg-success">
                                                 <i class="fas fa-check-circle me-1"></i>Tasdiqlangan
                                             </span>
+                                        {% elif order.status == 'tayor' %}
+                                            <span class="status-badge bg-info">
+                                                <i class="fas fa-utensils me-1"></i>Tayor
+                                            </span>
+                                        {% elif order.status == 'olib_ketildi' %}
+                                            <span class="status-badge bg-secondary">
+                                                <i class="fas fa-hand-holding me-1"></i>Olib ketildi
+                                            </span>
                                         {% endif %}
                                     </td>
                                     <td>{{ order.created_at|date:"H:i" }}</td>
@@ -160,8 +229,8 @@
                         </table>
                     </div>
                 {% else %}
-                    <div class="text-center py-2"> {# Reduced #}
-                        <i class="fas fa-shopping-cart fa-3x text-muted mb-2"></i> {# Reduced #}
+                    <div class="text-center py-2">
+                        <i class="fas fa-shopping-cart fa-3x text-muted mb-2"></i>
                         <p class="text-muted">Oxirgi buyurtmalar yo'q</p>
                     </div>
                 {% endif %}
@@ -192,8 +261,8 @@
                         {% endfor %}
                     </div>
                 {% else %}
-                    <div class="text-center py-2"> {# Reduced #}
-                        <i class="fas fa-users fa-3x text-muted mb-2"></i> {# Reduced #}
+                    <div class="text-center py-2">
+                        <i class="fas fa-users fa-3x text-muted mb-2"></i>
                         <p class="text-muted">Mijozlar ma'lumoti yo'q</p>
                     </div>
                 {% endif %}
@@ -204,21 +273,35 @@
 
 <style>
 .stats-card {
-    transition: none; /* Removed transition */
+    transition: none;
     border: none;
     background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
 }
 
+.stats-card-pickup {
+    transition: none;
+    border: none;
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+}
+
+.stats-card-delivery {
+    transition: none;
+    border: none;
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    color: white;
+}
+
 .stats-icon {
-    width: 56px; /* Reduced */
-    height: 56px; /* Reduced */
+    width: 56px;
+    height: 56px;
     border-radius: var(--radius-xl);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 1.5rem;
     color: white;
-    margin-right: 0.6rem; /* Reduced */
+    margin-right: 0.6rem;
 }
 
 .stats-icon.bg-warning {
@@ -237,25 +320,45 @@
     background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
 }
 
+.stats-icon.bg-pickup {
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    color: #f59e0b;
+}
+
+.stats-icon.bg-delivery {
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    color: #3b82f6;
+}
+
 .stats-number {
-    font-size: 1.8rem; /* Reduced */
+    font-size: 1.8rem;
     font-weight: 800;
     color: var(--text-primary);
     line-height: 1;
+}
+
+.stats-card-pickup .stats-number,
+.stats-card-delivery .stats-number {
+    color: white;
 }
 
 .stats-label {
     font-size: 0.875rem;
     color: var(--text-secondary);
     font-weight: 500;
-    margin-top: 0.2rem; /* Reduced */
+    margin-top: 0.2rem;
+}
+
+.stats-card-pickup .stats-label,
+.stats-card-delivery .stats-label {
+    color: rgba(255, 255, 255, 0.9);
 }
 
 .sales-amount {
-    font-size: 2.2rem; /* Reduced */
+    font-size: 2.2rem;
     font-weight: 800;
     color: var(--success-color);
-    margin-bottom: 0.4rem; /* Reduced */
+    margin-bottom: 0.4rem;
 }
 
 .sales-label {
@@ -265,14 +368,14 @@
 }
 
 .weekly-stat {
-    padding: 0.6rem 0; /* Reduced */
+    padding: 0.6rem 0;
 }
 
 .weekly-number {
-    font-size: 1.5rem; /* Reduced */
+    font-size: 1.5rem;
     font-weight: 700;
     color: var(--text-primary);
-    margin-bottom: 0.2rem; /* Reduced */
+    margin-bottom: 0.2rem;
 }
 
 .weekly-label {
@@ -281,38 +384,81 @@
     font-weight: 500;
 }
 
+.service-stat {
+    padding: 0.4rem 0;
+}
+
+.service-number {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-bottom: 0.2rem;
+}
+
+.service-number.pickup {
+    color: #f59e0b;
+}
+
+.service-number.delivery {
+    color: #3b82f6;
+}
+
+.service-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.service-badge-sm {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.4rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.service-badge-sm.service-delivery {
+    background: #3b82f6;
+    color: white;
+}
+
+.service-badge-sm.service-pickup {
+    background: #f59e0b;
+    color: white;
+}
+
 .customers-list {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem; /* Reduced */
+    gap: 0.6rem;
 }
 
 .customer-item {
     display: flex;
     align-items: center;
-    padding: 0.6rem; /* Reduced */
+    padding: 0.6rem;
     background: var(--bg-secondary);
     border-radius: var(--radius-lg);
-    transition: none; /* Removed transition */
+    transition: none;
 }
 
 .customer-avatar {
-    width: 36px; /* Reduced */
-    height: 36px; /* Reduced */
+    width: 36px;
+    height: 36px;
     background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     color: white;
-    margin-right: 0.6rem; /* Reduced */
-    font-size: 0.9rem; /* Reduced */
+    margin-right: 0.6rem;
+    font-size: 0.9rem;
 }
 
 .customer-name {
     font-weight: 600;
     color: var(--text-primary);
-    margin-bottom: 0.2rem; /* Reduced */
+    margin-bottom: 0.2rem;
 }
 
 .customer-orders {
