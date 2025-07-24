@@ -23,4 +23,5 @@ urlpatterns = [
     path('api/orders/update-status-legacy/', views.update_order_status_api, name='update_order_status_api'),
     path('api/orders/<int:telegram_id>/user-orders/', views.get_user_orders_api, name='get_user_orders_api'),
     path('api/orders/<int:order_id>/details/', views.get_order_details_api, name='get_order_details_api'),
+    path('api/products/<int:product_id>/toggle-availability/', views.toggle_product_availability, name='toggle_product_availability'),
 ]
