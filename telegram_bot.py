@@ -93,12 +93,15 @@ def load_data():
     global mahsulotlar, kategoriyalar, bot_settings
     mahsulotlar = {}
     kategoriyalar = {}
+
     
     for product in Product.objects.filter(is_available=True):
+        full_image_url = f"{settings.SITE_URL}{product.image.url}" if product.image else None
+
         mahsulotlar[product.name] = {
             "narx": product.price,  # Keep as Decimal
             "desc": product.description,
-            "rasm": product.image.url if product.image else None
+            "rasm":  full_image_url
         }
     
     for category in Category.objects.filter(is_active=True):
@@ -112,7 +115,7 @@ def load_data():
             pk=1, # Use a fixed primary key to ensure only one instance
             defaults={
                 'service_start_time': datetime.time(9, 0),  # 09:00
-                'service_end_time': datetime.time(00, 0),    # 22:00
+                'service_end_time': datetime.time(22, 0),    # 22:00
                 'delivery_base_cost': 5000,
                 'delivery_cost_per_extra_km_block': 5000,
                 'delivery_max_radius_km': 10.0
@@ -125,7 +128,7 @@ def load_data():
         # Fallback to hardcoded defaults if DB access fails
         bot_settings = type('BotSettings', (object,), {
             'service_start_time': datetime.time(9, 0),
-            'service_end_time': datetime.time(00, 0),
+            'service_end_time': datetime.time(22, 0),
             'delivery_base_cost': Decimal('5000'),
             'delivery_cost_per_extra_km_block': Decimal('5000'),
             'delivery_max_radius_km': 10.0
