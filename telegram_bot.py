@@ -6,16 +6,12 @@ import math
 import requests # Still needed for Telegram API calls
 import datetime # Added for time comparison
 from decimal import Decimal
-
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton,
-    ReplyKeyboardMarkup, InputMediaPhoto, ReplyKeyboardRemove
-)
+    ReplyKeyboardMarkup, InputMediaPhoto, ReplyKeyboardRemove)
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler,
-    ContextTypes, filters
-)
-
+    ContextTypes, filters)
 # Import sync_to_async for bridging sync Django ORM with async bot
 from asgiref.sync import sync_to_async
 from django.db import transaction # For atomic operations
@@ -23,8 +19,7 @@ from django.db import transaction # For atomic operations
 # Configure logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
+    level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Setup Django environment
@@ -40,10 +35,12 @@ from django.utils import timezone # For setting timestamps
 # Global variables
 STORE_LAT = 40.665236
 STORE_LON = 72.563908
-
 mahsulotlar = {}
 kategoriyalar = {}
 bot_settings = None # Global variable to hold bot settings
+
+# Placeholder image URL for cases where local image is not found or cannot be sent
+PLACEHOLDER_IMAGE_URL = "https://i.postimg.cc/kgbRwBbN/photo-2025-07-24-23-50-48.jpg"
 
 # --- Utility functions for Telegram API (adapted from chef_panel/utils.py) ---
 def send_telegram_message(chat_id, text, reply_markup=None, message_id=None, parse_mode="Markdown"):
@@ -56,14 +53,12 @@ def send_telegram_message(chat_id, text, reply_markup=None, message_id=None, par
     }
     if reply_markup:
         payload['reply_markup'] = json.dumps(reply_markup)
-
     try:
         if message_id:
             url += "editMessageText"
             payload['message_id'] = message_id
         else:
             url += "sendMessage"
-
         response = requests.post(url, json=payload)
         response.raise_for_status()
         return response.json()
@@ -93,12 +88,10 @@ def load_data():
     global mahsulotlar, kategoriyalar, bot_settings
     mahsulotlar = {}
     kategoriyalar = {}
-
     
     for product in Product.objects.filter(is_available=True):
         # O'zgartirish: Rasmni lokal fayl yo'li sifatida saqlash
         local_image_path = product.image.path if product.image else None
-
         mahsulotlar[product.name] = {
             "narx": product.price,  # Keep as Decimal
             "desc": product.description,
@@ -301,7 +294,7 @@ def _update_telegram_messages(order, old_status, new_status, changed_by_user=Non
             if courier_msg_response and courier_msg_response.get('ok'):
                 order.courier_message_id = courier_msg_response['result']['message_id']
                 order.save()
-            
+                
             if order.latitude and order.longitude:
                 send_telegram_location(
                     chat_id=settings.ADMIN_CHAT_ID,
@@ -320,7 +313,6 @@ def calculate_distance_km(lat1, lon1, lat2, lon2):
     R = 6371.0  # Yer shari radiusi (km)
     d_lat = math.radians(lat2 - lat1)
     d_lon = math.radians(lon2 - lon1)
-
     a = (math.sin(d_lat / 2))**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * (math.sin(d_lon / 2))**2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     distance = R * c
@@ -383,6 +375,7 @@ def main_inline_menu(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup
 def build_cart_message(user_savat, context):
     if not user_savat:
         return "🛒 Савтингиз бўш!"
+
     text = "🛒 Саватчада:\n"
     total = Decimal('0')
     for product, qty in user_savat.items():
@@ -433,21 +426,7 @@ def build_cart_keyboard(savat):
         ])
     return rows
 
-async def remove_image_from_message(query, text, keyboard):
-    try:
-        await query.edit_message_media(
-            media=InputMediaPhoto(
-                media="", # Placeholder image - this might not work as expected, typically needs a file_id or URL
-                caption=text,
-                parse_mode='Markdown'
-            ),
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-    except Exception as e:
-        logger.error(f"Failed to replace image with placeholder: {e}")
-        await query.answer("Хатолик юз берди. Илтимос, қайта уриниб кўринг.", show_alert=True)
-
-async def edit_message_based_on_type(query, text, keyboard, force_text=False):
+async def edit_message_based_on_type(query, text, keyboard, force_text=False, image_url=None):
     message = query.message
     if force_text:
         try:
@@ -460,18 +439,33 @@ async def edit_message_based_on_type(query, text, keyboard, force_text=False):
         except Exception as e:
             logger.error(f"Failed to delete and resend message: {e}")
             await query.answer("Хатолик юз берди. Илтимос, қайта уриниб кўринг.", show_alert=True)
-    elif message.photo:
+    elif message.photo or image_url: # Check if message has photo or if a new image_url is provided
         try:
-            # If the message already has a photo, try to edit its caption and keyboard
-            # Note: This does not remove the photo, only changes text/keyboard
-            await query.edit_message_caption(
+            # If image_url is provided, use it. Otherwise, keep existing photo.
+            # If message.photo is empty, and no image_url, this will fail.
+            # Telegram API requires a file_id or URL for InputMediaPhoto.
+            media_to_send = InputMediaPhoto(
+                media=image_url if image_url else message.photo[-1].file_id, # Use provided URL or existing file_id
                 caption=text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode="Markdown"
+                parse_mode='Markdown'
+            )
+            await query.edit_message_media(
+                media=media_to_send,
+                reply_markup=InlineKeyboardMarkup(keyboard)
             )
         except Exception as e:
-            logger.error(f"Failed to edit message caption: {e}")
+            logger.error(f"Failed to edit message media: {e}")
             await query.answer("Хатолик юз берди. Илтимос, қайта уриниб кўринг.", show_alert=True)
+            # Fallback to editing text if media edit fails
+            try:
+                await query.edit_message_text(
+                    text=text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode="Markdown"
+                )
+            except Exception as e_text:
+                logger.error(f"Failed to fallback to edit message text: {e_text}")
+                await query.answer("Хатолик юз берди. Илтимос, қайта уриниб кўринг.", show_alert=True)
     elif message.text:
         try:
             await query.edit_message_text(
@@ -481,7 +475,7 @@ async def edit_message_based_on_type(query, text, keyboard, force_text=False):
             )
         except Exception as e:
             logger.error(f"Failed to edit message text: {e}")
-            await query.answer("Хатолик юз берди. Илтимос, қайта уриниб кўринг.", show_alert=True)
+            await query.answer("Хатолик юз берди. Илtimos, qayta urinib ko'ring.", show_alert=True)
     else:
         try:
             await query.delete_message()
@@ -613,7 +607,7 @@ async def handle_service_type(update: Update, context: ContextTypes.DEFAULT_TYPE
     else:
         text = "🏪 Олиб кетиш хизмати танланди!\n\n🍽 Энди буюртма беришингиз мумкин:"
     
-    await query.edit_message_text(text, reply_markup=main_inline_menu(context))
+    await edit_message_based_on_type(query, text, main_inline_menu(context).inline_keyboard)
 
 # ----------------------------------------------------
 # Lokatsiya + masofa + yetkazib berish narxi (faqat delivery uchun)
@@ -632,7 +626,6 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Maksimal radiusdan uzoq => yetkazib berish yo'q
             del context.user_data['awaiting_location']
             context.user_data['delivery_possible'] = False
-
             await update.message.reply_text(
                 f"😔 Узр, сизнинг манзилингиз бизнинг {bot_settings.delivery_max_radius_km} км радиусимиздан ташқарида.\n"
                 "🚫 Шу сабаб етказиб бериш хизмати мавжуд эмас.\n"
@@ -653,7 +646,6 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 'longitude': user_lon
             }
             del context.user_data['awaiting_location']
-
             await update.message.reply_text(
                 f"📍 Локация қабул қилинди!\n"
                 f"📏 Масофа: таҳминан {distance_km:.1f} км\n"
@@ -671,6 +663,7 @@ async def handle_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
         address = update.message.text
         if address.lower() == "❌ қўшимча манзил керак эмас" or address.lower() == "қўшимча манзил керак эмас":
             address = None
+
         context.user_data['address'] = address
         del context.user_data['awaiting_address']
 
@@ -713,16 +706,14 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text += f"📊 Жами буюртмалар сони: {order_count}\n"
 
     keyboard = [[InlineKeyboardButton("⬅️ Орқага", callback_data="main_menu")]]
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+    await edit_message_based_on_type(query, text, keyboard)
 
 async def show_user_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-
     data = query.data  # masalan "user_orders:1"
     _, page_str = data.split(":")
     page = int(page_str)
-
     user = update.effective_user
     
     # Django ORM dan foydalanuvchi buyurtmalarini olish
@@ -745,14 +736,15 @@ async def show_user_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info(f"Foydalanuvchi {user.id} uchun {len(orders_data)} ta buyurtma topildi.")
         else:
             logger.info(f"Foydalanuvchi {user.id} uchun mijoz topilmadi, buyurtmalar yo'q.")
-            await query.edit_message_text(
+            await edit_message_based_on_type(
+                query,
                 "📋 Сизда ҳали буюртмалар мавжуд эмас.",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Орқага", callback_data="main_menu")]])
+                [[InlineKeyboardButton("⬅️ Орқага", callback_data="main_menu")]]
             )
             return # Exit early if no customer
     except Exception as e:
         logger.error(f"Django ORM dan buyurtmalarni olishda xato: {e}", exc_info=True)
-        await query.edit_message_text("Буюртмаларни юклашда техник хато юз берди. Илтимос, кейинроқ уриниб кўринг.")
+        await edit_message_based_on_type(query, "Буюртмаларни юклашда техник хато юз берди. Илтимос, кейинроқ уриниб кўринг.", [[InlineKeyboardButton("⬅️ Орқага", callback_data="main_menu")]])
         return # Exit early on error
 
     # Pagination logic
@@ -767,9 +759,10 @@ async def show_user_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not subset:
         # This case should ideally be caught by the 'if customer' block above,
         # but keeping it for robustness if pagination results in empty subset.
-        await query.edit_message_text(
+        await edit_message_based_on_type(
+            query,
             "📋 Бу саҳифада буюртма топилмади.",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Орқага", callback_data="main_menu")]])
+            [[InlineKeyboardButton("⬅️ Орқага", callback_data="main_menu")]]
         )
         return
 
@@ -805,13 +798,11 @@ async def show_user_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
         nav_buttons.append(InlineKeyboardButton("◀️ Олдинги", callback_data=f"user_orders:{page-1}"))
     if page < total_pages:
         nav_buttons.append(InlineKeyboardButton("Кейинги ▶️", callback_data=f"user_orders:{page+1}"))
-
     if nav_buttons:
         buttons.append(nav_buttons)
     buttons.append([InlineKeyboardButton("⬅️ Орқага", callback_data="main_menu")])
 
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
-
+    await edit_message_based_on_type(query, text, buttons)
 
 # ----------------------------------------------------
 # Kategoriyalar va mahsulotlar
@@ -819,7 +810,6 @@ async def show_user_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def show_menu_inline(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-
     await load_data() # Ensure latest products/categories and bot_settings are loaded
 
     # Get bot settings from context.bot_data
@@ -877,7 +867,6 @@ async def show_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     category_name = query.data.split(":")[1]
-
     await load_data() # Ensure latest products/categories are loaded
 
     product_buttons = []
@@ -901,15 +890,21 @@ async def show_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
         product_buttons.append([InlineKeyboardButton("⬅️ Орқага", callback_data="menu")])
 
     new_text = f"🍽 **{category_name}** категориясидаги маҳсулотлар:"
-    await edit_message_based_on_type(query, new_text, product_buttons)
+    
+    # Agar oldingi xabar rasmli bo'lsa, placeholder rasmni saqlash
+    if query.message.photo:
+        await edit_message_based_on_type(query, new_text, product_buttons, image_url=PLACEHOLDER_IMAGE_URL)
+    else:
+        await edit_message_based_on_type(query, new_text, product_buttons)
 
 async def show_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     product_name = query.data.split(":")[1]
     product_data = mahsulotlar.get(product_name, {})
+
     if not product_data:
-        await query.edit_message_text("❌ Бу маҳсулот топилмади.")
+        await edit_message_based_on_type(query, "❌ Бу маҳсулот топилмади.", []) # Use edit_message_based_on_type
         return
 
     narx = product_data.get("narx", Decimal('0'))
@@ -945,6 +940,7 @@ async def show_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if product_name in prods:
             product_category = cat
             break
+
     if product_category:
         keyboard.append([InlineKeyboardButton("⬅️ Орқага", callback_data=f"category:{product_category}")])
 
@@ -959,33 +955,36 @@ async def show_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"Image file not found at {image_path}")
             await query.answer("Расм топилмади.", show_alert=True)
             # Agar rasm topilmasa, faqat matnni yuborish
-            await query.edit_message_text(
+            await edit_message_based_on_type( # Corrected call
+                query,
                 text,
-                parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(keyboard)
+                keyboard,
+                image_url=PLACEHOLDER_IMAGE_URL # Use placeholder image
             )
         except Exception as e:
             logger.error(f"Failed to edit message media with local file {image_path}: {e}")
             await query.answer("Расм юборишда хатолик юз берди. Илтимос, қайта уриниб кўринг.", show_alert=True)
             # Boshqa xatoliklarda ham faqat matnni yuborish
-            await query.edit_message_text(
+            await edit_message_based_on_type( # Corrected call
+                query,
                 text,
-                parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(keyboard)
+                keyboard,
+                image_url=PLACEHOLDER_IMAGE_URL # Use placeholder image
             )
     else:
-        # Agar rasm yo'li mavjud bo'lmasa, faqat matnni yuborish
-        await query.edit_message_text(
+        # Agar rasm yo'li mavjud bo'lmasa, placeholder rasmni yuborish
+        await edit_message_based_on_type( # Corrected call
+            query,
             text,
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            keyboard,
+            image_url=PLACEHOLDER_IMAGE_URL # Use placeholder image
         )
 
 async def product_go_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-
     _, category = query.data.split(":")
+
     try:
         await query.edit_message_reply_markup(reply_markup=None)
     except Exception as e:
@@ -1025,6 +1024,7 @@ async def product_go_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+
     try:
         _, product_name, change = query.data.split(":")
         change = int(change)
@@ -1061,6 +1061,7 @@ async def handle_quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if product_name in prods:
             product_category = cat
             break
+
     if product_category:
         keyboard.append([InlineKeyboardButton("⬅️ Орқага", callback_data=f"category:{product_category}")])
 
@@ -1074,23 +1075,30 @@ async def handle_quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except FileNotFoundError:
             logger.error(f"Image file not found at {image_path}")
             await query.answer("Расм топилмади.", show_alert=True)
-            # Agar rasm topilmasa, faqat matnni yuborish
-            await query.edit_message_text(
-                text=text, parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(keyboard)
+            # Agar rasm topilmasa, placeholder rasmni yuborish
+            await edit_message_based_on_type( # Corrected call
+                query,
+                text,
+                keyboard,
+                image_url=PLACEHOLDER_IMAGE_URL # Use placeholder image
             )
         except Exception as e:
             logger.error(f"Failed to update quantity selection with local file {image_path}: {e}")
             await query.answer("Расм юборишда хатолик юз берди. Илтимос, қайта уриниб кўринг.", show_alert=True)
-            # Boshqa xatoliklarda ham faqat matnni yuborish
-            await query.edit_message_text(
-                text=text, parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(keyboard)
+            # Boshqa xatoliklarda ham placeholder rasmni yuborish
+            await edit_message_based_on_type( # Corrected call
+                query,
+                text,
+                keyboard,
+                image_url=PLACEHOLDER_IMAGE_URL # Use placeholder image
             )
     else:
-        await query.edit_message_text(
-            text=text, parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+        # Agar rasm yo'li mavjud bo'lmasa, placeholder rasmni yuborish
+        await edit_message_based_on_type( # Corrected call
+            query,
+            text,
+            keyboard,
+            image_url=PLACEHOLDER_IMAGE_URL # Use placeholder image
         )
 
 async def add_to_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1140,7 +1148,12 @@ async def add_to_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
         product_buttons.append([InlineKeyboardButton("⬅️ Орқага", callback_data="menu")])
 
     new_text = f"✅ **{product_name}** саватга {selected_quantity} дона қўшилди!\n\n🍽 **{product_category}** категориясидаги маҳсулотлар:"
-    await edit_message_based_on_type(query, new_text, product_buttons)
+    
+    # Agar oldingi xabar rasmli bo'lsa, placeholder rasmni saqlash
+    if query.message.photo:
+        await edit_message_based_on_type(query, new_text, product_buttons, image_url=PLACEHOLDER_IMAGE_URL)
+    else:
+        await edit_message_based_on_type(query, new_text, product_buttons)
 
 async def view_cart_inline(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1149,6 +1162,7 @@ async def view_cart_inline(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def update_cart_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+
     try:
         _, product_name, action = query.data.split(":")
         savat = context.user_data.get('savat', {})
@@ -1200,7 +1214,7 @@ async def checkout(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if total_products_price < Decimal('15000'):
         await edit_message_based_on_type(
             query,
-            f"❌ Минимал буюртма қиймати 15,000 сўм бўлиши керак.\n"
+            f"❌ Минимал бу��ртма қиймати 15,000 сўм бўлиши керак.\n"
             f"Ҳозирги сумма: {total_products_price:,} сўм\n"
             f"Қўшимча: {Decimal('15000') - total_products_price:,} сўм керак.",
             [[InlineKeyboardButton("⬅️ Орқага", callback_data="show_cart")]]
@@ -1210,15 +1224,16 @@ async def checkout(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Check service time
     current_bot_settings = context.bot_data.get('bot_settings')
     if not current_bot_settings:
-        await query.edit_message_text("❌ Бот созламалари юкланмади. Илтимос, кейинроq уриниб кўринг.")
+        await edit_message_based_on_type(query, "❌ Бот созламалари юкланмади. Илтимос, кейинроx уриниб кўринг.", [[InlineKeyboardButton("⬅️ Орқага", callback_data="main_menu")]])
         return
 
     now = timezone.now()
     if not is_service_time_active(now, current_bot_settings.service_start_time, current_bot_settings.service_end_time):
-        await query.edit_message_text(
+        await edit_message_based_on_type(
+            query,
             f"⏰ Узр, ҳозирда буюртмалар қабул қилмаймиз.\n"
             f"Бизнинг иш вақтимиз: {current_bot_settings.service_start_time.strftime('%H:%M')} дан {current_bot_settings.service_end_time.strftime('%H:%M')} гача.",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Бош меню", callback_data="main_menu")]])
+            [[InlineKeyboardButton("⬅️ Бош меню", callback_data="main_menu")]]
         )
         # Clear user data as order cannot be placed
         context.user_data.pop('savat', None)
@@ -1287,7 +1302,6 @@ async def checkout(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ----------------------------------------------------
 # Buyurtmani tasdiqlash va Django ga yuborish (ORM orqali)
 # ----------------------------------------------------
-
 @sync_to_async
 @transaction.atomic
 def _create_order_and_items_sync(telegram_user_id, full_name, phone, payment_method, service_type, location, address, products_total, delivery_cost, total_amount, order_items_data):
@@ -1329,6 +1343,7 @@ def _create_order_and_items_sync(telegram_user_id, full_name, phone, payment_met
         new_status='yangi',
         notes='Telegram bot orqali yaratildi'
     )
+
     return order
 
 async def final_confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1338,16 +1353,17 @@ async def final_confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Get bot settings from context.bot_data
     current_bot_settings = context.bot_data.get('bot_settings')
     if not current_bot_settings:
-        await query.edit_message_text("❌ Бот созламалари юкланмади. Илтимос, кейинроқ уриниб кўринг.")
+        await edit_message_based_on_type(query, "❌ Бот созламалари юкланмади. Илтимос, кейинроқ уриниб кўринг.", [[InlineKeyboardButton("⬅️ Орқага", callback_data="main_menu")]])
         return
 
     # Check service time again before final confirmation
     now = timezone.now()
     if not is_service_time_active(now, current_bot_settings.service_start_time, current_bot_settings.service_end_time):
-        await query.edit_message_text(
+        await edit_message_based_on_type(
+            query,
             f"⏰ Узр, ҳозирда буюртмалар қабул қилмаймиз.\n"
             f"Бизнинг иш вақтимиз: {current_bot_settings.service_start_time.strftime('%H:%M')} дан {current_bot_settings.service_end_time.strftime('%H:%M')} гача.",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Бош меню", callback_data="main_menu")]])
+            [[InlineKeyboardButton("⬅️ Бош меню", callback_data="main_menu")]]
         )
         # Clear user data as order cannot be placed
         context.user_data.pop('savat', None)
@@ -1360,9 +1376,11 @@ async def final_confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     # Agar delivery bo'lsa va masofa > maksimal radius bo'lsa, rad etamiz
     if service_type == 'delivery' and context.user_data.get('delivery_possible') is False:
-        await query.edit_message_text(
+        await edit_message_based_on_type(
+            query,
             f"😔 Узр, сизнинг ҳудудингизга етказиб бериш хизмати мавжуд эмас (максимал {bot_settings.delivery_max_radius_km} км)."
-            "🍽 Меню орқали танишиб кўришингиз мумкин."
+            "🍽 Меню орқали танишиб кўришингиз мумкин.",
+            [[InlineKeyboardButton("⬅️ Орқага", callback_data="main_menu")]]
         )
         return
 
@@ -1373,12 +1391,13 @@ async def final_confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE
     location = context.user_data.get('location', {}) if service_type == 'delivery' else None
     address = context.user_data.get('address', None) if service_type == 'delivery' else None
     payment_method = context.user_data.get('payment_method', 'naqd')
-
     user_savat = context.user_data.get('savat', {})
+
     if not user_savat:
-        await query.edit_message_text(
+        await edit_message_based_on_type(
+            query,
             "🛒 Савтингиз бўш!",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Орқага", callback_data="main_menu")]])
+            [[InlineKeyboardButton("⬅️ Орқага", callback_data="main_menu")]]
         )
         return
 
@@ -1400,7 +1419,7 @@ async def final_confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE
             })
         else:
             logger.warning(f"Mahsulot topilmadi: {product_name}")
-            await query.edit_message_text(f"❌ Буюртма юборишда хато: '{product_name}' маҳсулоти топилмади.")
+            await edit_message_based_on_type(query, f"❌ Буюртма юборишда хато: '{product_name}' маҳсулоти топилмади.", [[InlineKeyboardButton("⬅️ Орқага", callback_data="main_menu")]])
             return
 
     total_amount = total_products_price + delivery_cost
@@ -1485,14 +1504,14 @@ async def final_confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         if user_msg_response and user_msg_response.get('ok'):
             order.user_message_id = user_msg_response['result']['message_id']
-        
+            
         await sync_to_async(order.save)() # Save message IDs
 
-        await query.edit_message_text(f"✅ Буюртмангиз #{order.order_number} қабул қилинди!")
+        await edit_message_based_on_type(query, f"✅ Буюртмангиз #{order.order_number} қабул қилинди!", main_inline_menu(context).inline_keyboard)
 
     except Exception as e:
         logger.error(f"Buyurtma yaratishda xato: {e}", exc_info=True)
-        await query.edit_message_text(f"❌ Буюртма юборишda xato: {str(e)}")
+        await edit_message_based_on_type(query, f"❌ Буюртма юборишda xato: {str(e)}", [[InlineKeyboardButton("⬅️ Орқага", callback_data="main_menu")]])
 
     # Clear user data after successful submission
     context.user_data.pop('savat', None)
@@ -1511,12 +1530,11 @@ async def cancel_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if 'payment_method' in context.user_data:
         del context.user_data['payment_method']
 
-    await query.edit_message_text("❌ Буюртма бекор қилинди.", reply_markup=main_inline_menu(context))
+    await edit_message_based_on_type(query, "❌ Буюртма бекор қилинди.", main_inline_menu(context).inline_keyboard)
 
 # ----------------------------------------------------
 # Oshpaz va Kuryer paneli callbacklari (ORM orqali)
 # ----------------------------------------------------
-
 @sync_to_async
 @transaction.atomic
 def _update_order_status_sync(order_id, new_status, old_status):
@@ -1569,11 +1587,12 @@ async def handle_chef_courier_status_update(update: Update, context: ContextType
             "courier_delivered": "yetkazildi",
             "courier_cancel": "bekor_qilingan",
         }
+
         new_status = status_map.get(action)
         logger.info(f"Mapped new status: {new_status}")
 
         if not new_status:
-            await query.edit_message_text("❌ Номаълум ҳолат ўзгариши.")
+            await edit_message_based_on_type(query, "❌ Номаълум ҳолат ўзгариши.", [])
             logger.warning(f"Unknown status change action: {action}")
             return
 
@@ -1593,7 +1612,7 @@ async def handle_chef_courier_status_update(update: Update, context: ContextType
             }
 
         if new_status not in valid_transitions.get(old_status, []):
-            await query.edit_message_text(f"Ҳолат {old_status} дан {new_status} га ўзгартиришга рухсат берилмаган.")
+            await edit_message_based_on_type(query, f"Ҳолат {old_status} дан {new_status} га ўзгартиришга рухсат берилмаган.", [])
             logger.warning(f"Invalid transition for order {order_id}: {old_status} -> {new_status} (service_type: {service_type})")
             return
 
@@ -1602,13 +1621,13 @@ async def handle_chef_courier_status_update(update: Update, context: ContextType
             
         await _update_telegram_messages(updated_order, old_status, new_status) # Pass the updated order object
         logger.info(f"Telegram messages updated for order {order_id}.")
-            
+        
     except Order.DoesNotExist:
         logger.error(f"Order with ID {order_id} not found.", exc_info=True)
-        await query.edit_message_text("❌ Буюртма топилмади.")
+        await edit_message_based_on_type(query, "❌ Буюртма топилмади.", [])
     except Exception as e:
         logger.error(f"Status update error for order {order_id}: {e}", exc_info=True)
-        await query.edit_message_text(f"❌ Хато: {str(e)}")
+        await edit_message_based_on_type(query, f"❌ Хато: {str(e)}", [])
 
 # ----------------------------------------------------
 # Fikr bildirish
@@ -1623,6 +1642,7 @@ async def feedback_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
+
     if context.user_data.get('awaiting_address'):
         await handle_address(update, context)
         return
