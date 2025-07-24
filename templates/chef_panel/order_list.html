@@ -4,7 +4,7 @@
 
 {% block content %}
 <!-- Filters -->
-<div class="card mb-2"> {# Reduced #}
+<div class="card mb-2">
     <div class="card-header">
         <h5 class="mb-0">
             <i class="fas fa-filter me-2"></i>
@@ -12,8 +12,8 @@
         </h5>
     </div>
     <div class="card-body">
-        <form method="GET" class="row g-1"> {# Reduced #}
-            <div class="col-md-4">
+        <form method="GET" class="row g-1">
+            <div class="col-md-3">
                 <label for="status_filter" class="form-label">Holat bo'yicha filter</label>
                 <select name="status" id="status_filter" class="form-select">
                     <option value="">Barchasi</option>
@@ -22,11 +22,20 @@
                     {% endfor %}
                 </select>
             </div>
+            <div class="col-md-3">
+                <label for="service_type_filter" class="form-label">Xizmat turi</label>
+                <select name="service_type" id="service_type_filter" class="form-select">
+                    <option value="">Barchasi</option>
+                    {% for service_value, service_label in service_type_choices %}
+                        <option value="{{ service_value }}" {% if service_type_filter == service_value %}selected{% endif %}>{{ service_label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
             <div class="col-md-4">
                 <label for="search_input" class="form-label">Qidiruv</label>
                 <input type="text" name="search" id="search_input" class="form-control" placeholder="Buyurtma #, Mijoz FIO, Telefon" value="{{ search }}">
             </div>
-            <div class="col-md-4 d-flex align-items-end">
+            <div class="col-md-2 d-flex align-items-end">
                 <div class="d-flex gap-1 w-100">
                     <button type="submit" class="btn btn-primary flex-fill">
                         <i class="fas fa-search me-2"></i>Filterlash
@@ -57,6 +66,7 @@
                             <th>Buyurtma #</th>
                             <th>Mijoz</th>
                             <th>Telefon</th>
+                            <th>Xizmat</th>
                             <th>Summa</th>
                             <th>Holat</th>
                             <th>Vaqt</th>
@@ -87,6 +97,17 @@
                                 </div>
                             </td>
                             <td>
+                                {% if order.service_type == 'delivery' %}
+                                    <span class="service-badge service-delivery">
+                                        <i class="fas fa-truck me-1"></i>Yetkazib berish
+                                    </span>
+                                {% else %}
+                                    <span class="service-badge service-pickup">
+                                        <i class="fas fa-store me-1"></i>Olib ketish
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
                                 <div class="d-flex align-items-center">
                                     <i class="fas fa-dollar-sign me-2 text-muted"></i>
                                     <strong>{{ order.total_amount|floatformat:0 }} so'm</strong>
@@ -112,6 +133,10 @@
                                 {% elif order.status == 'yetkazildi' %}
                                     <span class="status-badge bg-secondary">
                                         <i class="fas fa-check-double me-1"></i>Yetkazildi
+                                    </span>
+                                {% elif order.status == 'olib_ketildi' %}
+                                    <span class="status-badge bg-secondary">
+                                        <i class="fas fa-hand-holding me-1"></i>Olib ketildi
                                     </span>
                                 {% elif order.status == 'bekor_qilingan' %}
                                     <span class="status-badge bg-danger">
@@ -139,11 +164,11 @@
     </div>
 
     <!-- Pagination -->
-    <nav aria-label="Page navigation" class="mt-3"> {# Reduced #}
+    <nav aria-label="Page navigation" class="mt-3">
         <ul class="pagination">
             {% if page_obj.has_previous %}
                 <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}&status={{ status_filter }}&search={{ search }}">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}&status={{ status_filter }}&service_type={{ service_type_filter }}&search={{ search }}">
                         <i class="fas fa-chevron-left me-2"></i>Oldingi
                     </a>
                 </li>
@@ -157,7 +182,7 @@
             
             {% if page_obj.has_next %}
                 <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.next_page_number }}&status={{ status_filter }}&search={{ search }}">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}&status={{ status_filter }}&service_type={{ service_type_filter }}&search={{ search }}">
                         Keyingi<i class="fas fa-chevron-right ms-2"></i>
                     </a>
                 </li>
@@ -167,10 +192,10 @@
 {% else %}
     <!-- Empty State -->
     <div class="card">
-        <div class="card-body text-center py-3"> {# Reduced #}
+        <div class="card-body text-center py-3">
             <i class="fas fa-search fa-4x text-muted mb-3"></i>
             <h4 class="text-muted mb-3">Buyurtmalar topilmadi</h4>
-            <p class="text-muted mb-3"> {# Reduced #}Qidiruv shartlaringizga mos buyurtmalar mavjud emas</p>
+            <p class="text-muted mb-3">Qidiruv shartlaringizga mos buyurtmalar mavjud emas</p>
             <a href="{% url 'chef_panel:order_list' %}" class="btn btn-primary">
                 <i class="fas fa-refresh me-2"></i>Barchasini ko'rish
             </a>
@@ -190,6 +215,27 @@
     color: white;
     font-size: 0.875rem;
     box-shadow: var(--shadow-xs);
+}
+
+.service-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.service-delivery {
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    color: white;
+}
+
+.service-pickup {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
 }
 
 @media (max-width: 768px) {
