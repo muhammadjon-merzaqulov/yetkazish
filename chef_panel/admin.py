@@ -35,24 +35,25 @@ class OrderItemInline(admin.TabularInline):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ['order_number', 'customer', 'status', 'total_amount', 'created_at']
-    list_filter = ['status', 'payment_method', 'created_at']
+    list_display = ['order_number', 'customer', 'status', 'service_type', 'total_amount', 'created_at']
+    list_filter = ['status', 'service_type', 'payment_method', 'created_at']
     search_fields = ['order_number', 'customer__full_name', 'customer__phone_number']
-    readonly_fields = ['order_number', 'created_at', 'confirmed_at', 'ready_at', 'delivered_at']
+    readonly_fields = ['order_number', 'created_at', 'confirmed_at', 'ready_at', 'delivered_at', 'picked_up_at']
     inlines = [OrderItemInline]
     
     fieldsets = (
         ('Asosiy ma\'lumotlar', {
-            'fields': ('order_number', 'customer', 'telegram_user_id', 'status', 'payment_method')
+            'fields': ('order_number', 'customer', 'telegram_user_id', 'status', 'payment_method', 'service_type')
         }),
-        ('Manzil', {
-            'fields': ('latitude', 'longitude', 'address')
+        ('Manzil (faqat yetkazib berish uchun)', {
+            'fields': ('latitude', 'longitude', 'address'),
+            'classes': ('collapse',)
         }),
         ('Narxlar', {
             'fields': ('products_total', 'delivery_cost', 'total_amount')
         }),
         ('Vaqt ma\'lumotlari', {
-            'fields': ('created_at', 'confirmed_at', 'ready_at', 'delivered_at')
+            'fields': ('created_at', 'confirmed_at', 'ready_at', 'delivered_at', 'picked_up_at')
         }),
         ('Telegram Xabar IDlari', {
             'fields': ('chef_message_id', 'user_message_id', 'courier_message_id'),
