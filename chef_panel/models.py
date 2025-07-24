@@ -60,6 +60,7 @@ class Order(models.Model):
         ('tayor', 'Tayor'),
         ('yolda', 'Yo\'lda'),
         ('yetkazildi', 'Yetkazildi'),
+        ('olib_ketildi', 'Olib ketildi'),
         ('bekor_qilingan', 'Bekor qilingan'),
     ]
 
@@ -69,20 +70,26 @@ class Order(models.Model):
         ('online', 'Online to\'lov'),
     ]
 
+    SERVICE_TYPE_CHOICES = [
+        ('delivery', 'Yetkazib berish'),
+        ('pickup', 'Olib ketish'),
+    ]
+
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, verbose_name="Mijoz")
     telegram_user_id = models.BigIntegerField(verbose_name="Telegram User ID", null=True, blank=True)
     order_number = models.CharField(max_length=20, unique=True, verbose_name="Buyurtma raqami")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='yangi', verbose_name="Holati")
     payment_method = models.CharField(max_length=20, choices=PAYMENT_CHOICES, default='naqd', verbose_name="To'lov usuli")
+    service_type = models.CharField(max_length=20, choices=SERVICE_TYPE_CHOICES, default='delivery', verbose_name="Xizmat turi")
     
-    # Manzil ma'lumotlari
+    # Manzil ma'lumotlari (faqat delivery uchun)
     latitude = models.FloatField(verbose_name="Kenglik", null=True, blank=True)
     longitude = models.FloatField(verbose_name="Uzunlik", null=True, blank=True)
     address = models.TextField(blank=True, null=True, verbose_name="Manzil")
     
     # Narxlar
     products_total = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Mahsulotlar summasi")
-    delivery_cost = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Yetkazib berish narxi")
+    delivery_cost = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Yetkazib berish narxi", default=0)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Umumiy summa")
     
     # Vaqt ma'lumotlari
@@ -90,6 +97,7 @@ class Order(models.Model):
     confirmed_at = models.DateTimeField(null=True, blank=True, verbose_name="Tasdiqlangan vaqti")
     ready_at = models.DateTimeField(null=True, blank=True, verbose_name="Tayor bo'lgan vaqti")
     delivered_at = models.DateTimeField(null=True, blank=True, verbose_name="Yetkazilgan vaqti")
+    picked_up_at = models.DateTimeField(null=True, blank=True, verbose_name="Olib ketilgan vaqti")
     
     # Telegram message ID'lar
     chef_message_id = models.BigIntegerField(null=True, blank=True)
