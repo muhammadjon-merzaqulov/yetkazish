@@ -810,7 +810,27 @@ async def show_menu_inline(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    await load_data() # Ensure latest products/categories are loaded
+    await load_data() # Ensure latest products/categories and bot_settings are loaded
+
+    # Get bot settings from context.bot_data
+    current_bot_settings = context.bot_data.get('bot_settings')
+    if not current_bot_settings:
+        await edit_message_based_on_type(
+            query,
+            "❌ Бот созламалари юкланмади. Илтимос, кейинроқ уриниб кўринг.",
+            [[InlineKeyboardButton("⬅️ Орқага", callback_data="main_menu")]]
+        )
+        return
+
+    now = timezone.now()
+    if not is_service_time_active(now, current_bot_settings.service_start_time, current_bot_settings.service_end_time):
+        await edit_message_based_on_type(
+            query,
+            f"⏰ Узр, ҳозирда буюртмалар қабул қилмаймиз.\n"
+            f"Бизнинг иш вақтимиз: {current_bot_settings.service_start_time.strftime('%H:%M')} дан {current_bot_settings.service_end_time.strftime('%H:%M')} гача.",
+            [[InlineKeyboardButton("⬅️ Орқага", callback_data="main_menu")]]
+        )
+        return
 
     if not kategoriyalar:
         await edit_message_based_on_type(
@@ -1148,7 +1168,7 @@ async def checkout(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Check service time
     current_bot_settings = context.bot_data.get('bot_settings')
     if not current_bot_settings:
-        await query.edit_message_text("❌ Бот созламалари юкланмади. Илтимос, кейинроқ уриниб кўринг.")
+        await query.edit_message_text("❌ Бот созламалари юкланмади. Илтимос, кейинроq уриниб кўринг.")
         return
 
     now = timezone.now()
@@ -1425,7 +1445,7 @@ async def final_confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     except Exception as e:
         logger.error(f"Buyurtma yaratishda xato: {e}", exc_info=True)
-        await query.edit_message_text(f"❌ Буюртма юборишда хато: {str(e)}")
+        await query.edit_message_text(f"❌ Буюртма юборишda xato: {str(e)}")
 
     # Clear user data after successful submission
     context.user_data.pop('savat', None)
@@ -1597,7 +1617,7 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
         try:
             await context.bot.send_message(
                 chat_id=update.effective_user.id,
-                text="❌ Хатолик юз берди. Илтимос, кейинроq қайта уриниб кўринг."
+                text="❌ Хатолик юз берди. Илтимос, кейinroq qayta urinib ko'ring."
             )
         except Exception as e:
             logger.error(f"Failed to send error message to user: {e}")
