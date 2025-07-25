@@ -655,7 +655,23 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     [KeyboardButton("❌ Қўшимча манзил керак эмас")]
                 ], resize_keyboard=True)
             )
-            context.user_data['awaiting_address'] = True
+            context.user_data['awaiting_address'] = None
+            del context.user_data['awaiting_location']
+            await update.message.reply_text(
+                f"📍 Локация қабул қилинди!\n"
+                f"📏 Масофа: таҳминан {distance_km:.1f} км\n"
+                f"💰 Етказиб бериш нархи: {delivery_cost:,} сўм\n",
+                reply_markup=ReplyKeyboardRemove()
+            )
+            keyboard = [
+                [InlineKeyboardButton("✅ Тасдиқлаш", callback_data="final_confirm_order")],
+                [InlineKeyboardButton("❌ Бекор қилиш", callback_data="cancel_order")]
+            ]
+            context.user_data['payment_method'] = 'naqd'  # default
+            await update.message.reply_text(
+                "💳 Тўлов усули: Нақд\n🔸 Буюртмани тасдиқлаш учун \"✅ Тасдиқлаш\" босинг:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
 
 async def handle_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if 'awaiting_address' in context.user_data and context.user_data['awaiting_address']:
