@@ -61,6 +61,7 @@ def send_telegram_message(chat_id, text, reply_markup=None, message_id=None, par
             url += "sendMessage"
         response = requests.post(url, json=payload)
         response.raise_for_status()
+        logger.info(f"Telegram message sent successfully to chat_id: {chat_id}")
         return response.json()
     except requests.exceptions.RequestException as e:
         logger.error(f"Telegram xabar yuborishda xato: {e}")
@@ -77,6 +78,7 @@ def send_telegram_location(chat_id, latitude, longitude):
     try:
         response = requests.post(url, json=payload)
         response.raise_for_status()
+        logger.info(f"Telegram location sent successfully to chat_id: {chat_id}")
         return response.json()
     except requests.exceptions.RequestException as e:
         logger.error(f"Telegram lokatsiya yuborishda xato: {e}")
@@ -236,7 +238,10 @@ def _update_telegram_messages(order, old_status, new_status, changed_by_user=Non
 
     # Kuryer xabarini yangilash (faqat delivery uchun)
     if order.service_type == 'delivery':
+        logger.info(f"Processing courier message for delivery order {order.id}, status: {new_status}")
+        
         if order.courier_message_id:
+            logger.info(f"Updating existing courier message {order.courier_message_id} for order {order.id}")
             courier_text = f"{emoji} **Буюртма #{order.order_number} ҳолати ўзгарди: {order.get_status_display()}**\n\n"
             courier_text += f"👨‍💼 Исм: {order.customer.full_name}\n"
             courier_text += f"📱 Телефон: {order.customer.phone_number}\n"
@@ -262,13 +267,18 @@ def _update_telegram_messages(order, old_status, new_status, changed_by_user=Non
                     [{'text': "❌ Бекор қилиш", 'callback_data': f"courier_cancel:{order.id}"}]
                 ]
             
-            send_telegram_message(
+            courier_response = send_telegram_message(
                 chat_id=settings.ADMIN_CHAT_ID, # Assuming ADMIN_CHAT_ID is courier's chat ID
                 text=courier_text,
                 reply_markup={'inline_keyboard': courier_keyboard},
                 message_id=order.courier_message_id
             )
+            
+            if not courier_response or not courier_response.get('ok'):
+                logger.error(f"Failed to update courier message for order {order.id}")
+                
         elif new_status == 'tayor': # If order is ready, send new message to courier if no existing message_id
+            logger.info(f"Sending new courier message for order {order.id} (status: tayor)")
             courier_text = f"🚚 **Етказиб бериш учун янги буюртма #{order.order_number}**\n\n"
             courier_text += f"👨‍💼 Исм: {order.customer.full_name}\n"
             courier_text += f"📱 Телефон: {order.customer.phone_number}\n"
@@ -286,21 +296,35 @@ def _update_telegram_messages(order, old_status, new_status, changed_by_user=Non
                 [{'text': "🚚 Йўлда", 'callback_data': f"courier_on_way:{order.id}"}],
                 [{'text': "❌ Бекор қилиш", 'callback_data': f"courier_cancel:{order.id}"}]
             ]
+            
+            logger.info(f"Sending courier message to chat_id: {settings.ADMIN_CHAT_ID}")
             courier_msg_response = send_telegram_message(
                 chat_id=settings.ADMIN_CHAT_ID,
                 text=courier_text,
                 reply_markup={'inline_keyboard': courier_keyboard}
             )
+            
             if courier_msg_response and courier_msg_response.get('ok'):
                 order.courier_message_id = courier_msg_response['result']['message_id']
                 order.save()
-                
+                logger.info(f"Courier message sent successfully for order {order.id}, message_id: {order.courier_message_id}")
+            else:
+                logger.error(f"Failed to send courier message for order {order.id}")
+                logger.error(f"Response: {courier_msg_response}")
+            
+            # Send location after sending the message
             if order.latitude and order.longitude:
-                send_telegram_location(
+                logger.info(f"Sending location to courier for order {order.id}")
+                location_response = send_telegram_location(
                     chat_id=settings.ADMIN_CHAT_ID,
                     latitude=order.latitude,
                     longitude=order.longitude
                 )
+                if not location_response or not location_response.get('ok'):
+                    logger.error(f"Failed to send location to courier for order {order.id}")
+                    logger.error(f"Location response: {location_response}")
+            else:
+                logger.warning(f"No location data for order {order.id}")
 
 # ----------------------------------------------------
 # 1) Masofa va yetkazib berish narxi hisoblash
@@ -366,6 +390,7 @@ def main_inline_menu(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup
             InlineKeyboardButton("👤 Профил", callback_data="profile"),
             InlineKeyboardButton("🛍 Буюртмаларим", callback_data="user_orders:1")
         ],
+        [InlineKeyboardButton("✍️ Фикр билдириш", callback_data="feedback")]
     ]
     if user_savat:
         buttons[0].append(InlineKeyboardButton("🛒 Сават", callback_data="show_cart"))
@@ -646,6 +671,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
             }
             # Automatically set default address (no additional address needed)
             context.user_data['address'] = None
+            del context.user_data['awaiting_location']
 
             await update.message.reply_text(
                 f"📍 Локация қабул қилинди!\n"
