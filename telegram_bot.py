@@ -366,7 +366,6 @@ def main_inline_menu(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup
             InlineKeyboardButton("👤 Профил", callback_data="profile"),
             InlineKeyboardButton("🛍 Буюртмаларим", callback_data="user_orders:1")
         ],
-        [InlineKeyboardButton("✍️ Фикр билдириш", callback_data="feedback")]
     ]
     if user_savat:
         buttons[0].append(InlineKeyboardButton("🛒 Сават", callback_data="show_cart"))
