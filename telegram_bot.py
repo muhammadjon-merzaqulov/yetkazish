@@ -366,7 +366,6 @@ def main_inline_menu(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup
             InlineKeyboardButton("👤 Профил", callback_data="profile"),
             InlineKeyboardButton("🛍 Буюртмаларим", callback_data="user_orders:1")
         ],
-        [InlineKeyboardButton("✍️ Фикр билдириш", callback_data="feedback")]
     ]
     if user_savat:
         buttons[0].append(InlineKeyboardButton("🛒 Сават", callback_data="show_cart"))
@@ -645,18 +644,25 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 'latitude': user_lat,
                 'longitude': user_lon
             }
-            del context.user_data['awaiting_location']
+            # Automatically set default address (no additional address needed)
+            context.user_data['address'] = None
+
             await update.message.reply_text(
                 f"📍 Локация қабул қилинди!\n"
                 f"📏 Масофа: таҳминан {distance_km:.1f} км\n"
-                f"💰 Етказиб бериш нархи: {delivery_cost:,} сўм\n\n"
-                f"🏠 Агар қўшимча манзил киритмоқчи бўлсангиз, ёзинг.\n"
-                f"❌ Керак бўлмаса, \"Қўшимча манзил керак эмас\" деб ёзинг.",
-                reply_markup=ReplyKeyboardMarkup([
-                    [KeyboardButton("❌ Қўшимча манзил керак эмас")]
-                ], resize_keyboard=True)
+                f"💰 Етказиб бериш нархи: {delivery_cost:,} сўм",
+                reply_markup=ReplyKeyboardRemove()
             )
-            context.user_data['awaiting_address'] = True
+
+            keyboard = [
+                [InlineKeyboardButton("✅ Тасдиқлаш", callback_data="final_confirm_order")],
+                [InlineKeyboardButton("❌ Бекор қилиш", callback_data="cancel_order")]
+            ]
+            context.user_data['payment_method'] = 'naqd'  # default
+            await update.message.reply_text(
+                "💳 Тўлов усули: Нақд\n🔸 Буюртмани тасдиқлаш учун \"✅ Тасдиқлаш\" босинг:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
 
 async def handle_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if 'awaiting_address' in context.user_data and context.user_data['awaiting_address']:
@@ -1214,7 +1220,7 @@ async def checkout(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if total_products_price < Decimal('15000'):
         await edit_message_based_on_type(
             query,
-            f"❌ Минимал бу��ртма қиймати 15,000 сўм бўлиши керак.\n"
+            f"❌ Минимал буюртма қиймати 15,000 сўм бўлиши керак.\n"
             f"Ҳозирги сумма: {total_products_price:,} сўм\n"
             f"Қўшимча: {Decimal('15000') - total_products_price:,} сўм керак.",
             [[InlineKeyboardButton("⬅️ Орқага", callback_data="show_cart")]]
